@@ -1,7 +1,7 @@
 ﻿using HashCode2021;
 using HashCode2021.Input;
 
-var inputModel = ReadFile(@"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\breadth_of_choice.txt");
+var inputModel = ReadFile(@"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\an_example.txt");
 InitialSolution(inputModel);
 
 static List<Engineers> InitialSolution(InputModel input)
@@ -18,12 +18,17 @@ static List<Engineers> InitialSolution(InputModel input)
     var features = input.Features;
     var binaries = input.Binaries;
     double sum = 0;
-    while (++i <= 10000 && features.Count > 0)
+    while (++i <= 1000 && features.Count > 0)
     {
-        var feature = features.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
+        Features feature;
+        Random r = new Random();
+        if(r.Next() % 10 > 7)
+            feature = features.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
+        else
+            feature = GetFeatureWithLeastBinaries(binaries, features);
         var featureServices = feature?.Services;
         var correctBinaries = BinariesWithFeatureServices(feature, binaries);
-        var engineer = initialSolution.Where(x => x.AvailableDays > 0).OrderByDescending(x => x.AvailableDays).FirstOrDefault();
+        var engineer = initialSolution.Where(x => x.AvailableDays >= 0).OrderByDescending(x => x.AvailableDays).FirstOrDefault();
         if (correctBinaries.Count > 0)
         {
             var selectedBinary = correctBinaries.OrderBy(x => Guid.NewGuid()).FirstOrDefault();  //todo check if any service is being moved from this binary
@@ -41,6 +46,7 @@ static List<Engineers> InitialSolution(InputModel input)
 
                 if (correctBinaries.Count > 1)
                 {
+                    //check if we respect same feature same binary constraint
                     foreach (var service in selectedBinary.Services)
                         feature.Services = feature.Services.Where(x => x.Name != service.Name).ToList(); //remove service hack
                 }
@@ -60,6 +66,22 @@ static List<Engineers> InitialSolution(InputModel input)
     Console.WriteLine("Final Score: " + sum);
 
     return initialSolution;
+}
+
+static Features GetFeatureWithLeastBinaries(List<Binary> binaries, List<Features> features)
+{
+    int numBinaries = int.MaxValue;
+    var bestFeature = new Features();
+    foreach(var feature in features)
+    {
+       var toUseBinaries = BinariesWithFeatureServices(feature, binaries);
+       if(toUseBinaries.Count < numBinaries)
+       {
+            numBinaries = toUseBinaries.Count;
+            bestFeature = feature.Clone();
+       }
+    }
+    return bestFeature;
 }
 
 static int GetFeatureTime(Features feature, Binary binary, List<Engineers> engineers, int time)
@@ -137,9 +159,9 @@ static InputModel ReadFile(string path)
             {
                 int result;
                 var lineElements = line.Split(' ');
-                int.TryParse(lineElements[1],out result);
-                if(result > 0)
+                if(IsNumeric(lineElements[1]))
                 {
+                    int.TryParse(lineElements[1], out result);
                     inputModel.Services.Add(new Service(lineElements[0]));
                     inputModel.Binaries[result].Services.Add(new Service(lineElements[0]));
                     continue;
@@ -168,6 +190,14 @@ static InputModel ReadFile(string path)
         }
     }
     return inputModel;
+}
+
+static bool IsNumeric(object Expression)
+{
+    double retNum;
+
+    bool isNum = Double.TryParse(Convert.ToString(Expression), System.Globalization.NumberStyles.Any, System.Globalization.NumberFormatInfo.InvariantInfo, out retNum);
+    return isNum;
 }
 
 #endregion
