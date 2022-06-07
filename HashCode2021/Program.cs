@@ -27,7 +27,8 @@ static List<Engineers> InitialSolution(InputModel input)
         else
             feature = GetFeatureWithLeastBinaries(binaries, features);
         var featureServices = feature?.Services;
-        var correctBinaries = BinariesWithFeatureServices(feature, binaries);
+        var correctBinaries = BinariesWithFeatureServices(feature, binaries); 
+        //check if an enginner is already implementing this feature 
         var engineer = initialSolution.Where(x => x.AvailableDays >= 0).OrderByDescending(x => x.AvailableDays).FirstOrDefault();
         if (correctBinaries.Count > 0)
         {
@@ -65,9 +66,27 @@ static List<Engineers> InitialSolution(InputModel input)
     }
     Console.WriteLine("Final Score: " + sum);
 
+    SaveSolution(initialSolution, @"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Solutions\an_example.txt");
     return initialSolution;
 }
 
+static void SaveSolution(List<Engineers> solution, string filePath)
+{
+    solution = solution.Where(x => x.Operations.Count > 0).ToList();
+    int numEngineersWorking = solution.Count;
+    using(var writer = new StreamWriter(filePath))
+    {
+        writer.WriteLine(numEngineersWorking);
+        foreach(var enginner in solution)
+        {
+            writer.WriteLine(enginner.Operations.Count);
+            foreach(var operation in enginner.Operations)
+            {
+                writer.WriteLine(operation.Operation);
+            }
+        }
+    }
+}
 static Features GetFeatureWithLeastBinaries(List<Binary> binaries, List<Features> features)
 {
     int numBinaries = int.MaxValue;
