@@ -7,9 +7,11 @@
         {
             this.Id = Id;
             this.Operations = new List<EnginnerOperation>();
+            this.BusyUntil = 0;
         }
 
         public int AvailableDays { get; set; }
+        public int BusyUntil { get; set; }
         public List<EnginnerOperation> Operations { get; set; }
     }
 }

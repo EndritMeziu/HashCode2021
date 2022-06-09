@@ -9,6 +9,7 @@
             this.NumServices = NumServices;
             this.NumUsersBenefit = NumUserBenefit;
             this.Services = new List<Service>();
+            this.Done = false;
         }
         public Features()
         {
@@ -19,6 +20,7 @@
         public int Difficulty { get; set; }
         public int NumServices { get; set; }
         public int NumUsersBenefit { get; set; }
+        public bool Done { get; set; }
         public List<Service> Services { get; set; }
 
         public Features Clone()

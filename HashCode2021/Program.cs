@@ -2,11 +2,10 @@
 using HashCode2021.Input;
 
 var inputModel = ReadFile(@"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\an_example.txt");
-InitialSolution(inputModel);
+InitialSolution1(inputModel);
 
-static List<Engineers> InitialSolution(InputModel input)
+static void InitialSolution1(InputModel input)
 {
-    int i = 0;
     var initialSolution = new List<Engineers>(); //list of enginners 
     foreach (var enginner in input.Engineers)
     {
@@ -15,60 +14,82 @@ static List<Engineers> InitialSolution(InputModel input)
     }
 
     List<string> processedFeatures = new List<string>();
-    var features = input.Features;
+    var features = ProcessFeatures(input);
     var binaries = input.Binaries;
-    double sum = 0;
-    while (++i <= 1000 && features.Count > 0)
+    for (int i = 0; i < input.TimeLimitDays; i++)
     {
-        Features feature;
-        Random r = new Random();
-        if(r.Next() % 10 > 7)
-            feature = features.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
-        else
-            feature = GetFeatureWithLeastBinaries(binaries, features);
-        var featureServices = feature?.Services;
-        var correctBinaries = BinariesWithFeatureServices(feature, binaries); 
-        //check if an enginner is already implementing this feature 
-        var engineer = initialSolution.Where(x => x.AvailableDays >= 0).OrderByDescending(x => x.AvailableDays).FirstOrDefault();
-        if (correctBinaries.Count > 0)
+        foreach(var engineer in initialSolution)
         {
-            var selectedBinary = correctBinaries.OrderBy(x => Guid.NewGuid()).FirstOrDefault();  //todo check if any service is being moved from this binary
-            var featureDifficulty = GetFeatureTime(feature, selectedBinary, initialSolution, input.TimeLimitDays - engineer.AvailableDays);
-            if (engineer.AvailableDays >= featureDifficulty)
+            var doableFeatures = GetDoableFeatures(initialSolution, engineer.Id, features.Where(x => x.Feature.Done == false).ToList(), i);
+            if (doableFeatures.Count > 0)
             {
-                int endTime = (input.TimeLimitDays - engineer.AvailableDays) + featureDifficulty;
-                engineer.Operations.Add(new EnginnerOperation
-                {
-                    StartTime = input.TimeLimitDays - engineer.AvailableDays,
-                    EndTime = endTime,
-                    BinaryId = selectedBinary.Id,
-                    Operation = $"impl {feature.Name} {selectedBinary.Id}"
-                });
+                var toDoFeature = doableFeatures.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
+                var featureBinary = toDoFeature.Binary;
+                var feature = toDoFeature.Feature;
+                var featureTime = GetFeatureTime(feature, featureBinary, initialSolution, i);
 
-                if (correctBinaries.Count > 1)
+                if (engineer.AvailableDays - featureTime >= 0)
                 {
-                    //check if we respect same feature same binary constraint
-                    foreach (var service in selectedBinary.Services)
-                        feature.Services = feature.Services.Where(x => x.Name != service.Name).ToList(); //remove service hack
+                    var endTime = i + featureTime;
+                    engineer.AvailableDays -= featureTime;
+                    engineer.BusyUntil = endTime;
+                    engineer.Operations.Add(new EnginnerOperation
+                    {
+                        BinaryId = featureBinary.Id,
+                        StartTime = i,
+                        EndTime = endTime,
+                        FeatureName = feature.Name,
+                        Operation = $"impl {feature.Name} {featureBinary.Id}"
+                    });
+                    toDoFeature.Feature.Done = true;
                 }
-                else
-                {
-                    features.Remove(feature);
-                    int score = feature.NumUsersBenefit * (input.TimeLimitDays - endTime);
-                    Console.WriteLine("Score: " + score);
-                    sum += score;
-                }
-                engineer.AvailableDays -= featureDifficulty;
-                //update Engineer time
-
             }
         }
     }
-    Console.WriteLine("Final Score: " + sum);
 
     SaveSolution(initialSolution, @"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Solutions\an_example.txt");
-    return initialSolution;
 }
+
+static List<FeatureModel> ProcessFeatures(InputModel inputModel)
+{
+    List<FeatureModel> proccessedFeatures = new List<FeatureModel>();
+    var features = inputModel.Features;
+    var binaries = inputModel.Binaries;
+    foreach(var feature in features)
+    {
+        var featureBinaries = BinariesWithFeatureServices(feature, binaries);
+        foreach(var binary in featureBinaries)
+        {
+            proccessedFeatures.Add(new FeatureModel { Feature = feature.Clone(), Binary = binary.Clone() });
+        }
+    }
+
+    return proccessedFeatures;
+}
+
+
+static List<FeatureModel> GetDoableFeatures(List<Engineers> engineers, int engineerId, List<FeatureModel> features, int day)
+{
+    List<FeatureModel> availableFeatures = new List<FeatureModel>();
+    var engineer = engineers.Where(x => x.Id == engineerId).FirstOrDefault();
+
+    foreach(var feature in features)
+    {
+        int count = 0;
+        foreach (var worker in engineers)
+        {
+            foreach (var operation in worker.Operations)
+            {
+                if (operation.FeatureName == feature.Feature.Name && operation.StartTime <= day && operation.EndTime >= day && feature.Binary.Id == operation.BinaryId)  //todo ---> check if can be done based on engineer day and feature difficulty
+                    count++;
+            }
+        }
+        if (count == 0)
+            availableFeatures.Add(feature);
+    }
+    return availableFeatures;
+}
+
 
 static void SaveSolution(List<Engineers> solution, string filePath)
 {
