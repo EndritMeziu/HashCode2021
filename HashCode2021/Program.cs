@@ -1,7 +1,7 @@
 ﻿using HashCode2021;
 using HashCode2021.Input;
 
-var inputModel = ReadFile(@"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\an_example.txt");
+var inputModel = ReadFile(@"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\expectation_maximisation.txt");
 InitialSolution1(inputModel);
 
 static void InitialSolution1(InputModel input)
@@ -43,11 +43,52 @@ static void InitialSolution1(InputModel input)
                     });
                     toDoFeature.Feature.Done = true;
                 }
+                
+            }
+            else
+            {
+                if (engineer.BusyUntil <= i)
+                {
+                    engineer.Operations.Add(new EnginnerOperation
+                    {
+                        BinaryId = -1, //wait op
+                        StartTime = i,
+                        EndTime = i + 1,
+                        Operation = $"wait 1"
+                    });
+                    engineer.BusyUntil = i + 1;
+                }
             }
         }
     }
 
     SaveSolution(initialSolution, @"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Solutions\an_example.txt");
+    int score = CalculateScore(initialSolution, input);
+    Console.WriteLine("Score:"+score);
+}
+
+static int CalculateScore(List<Engineers> engineers, InputModel inputModel)
+{
+    int score = 0;
+    List<EnginnerOperation> operations = new List<EnginnerOperation>();
+    foreach(var engineer in engineers)
+    {
+        operations.AddRange(engineer.Operations.Where(x => !x.Operation.StartsWith("wait")).ToList());
+    }
+
+    var operations1 = operations.GroupBy(x => x.FeatureName).ToList();
+    foreach(var data in operations1)
+    {
+        var feature = data.OrderByDescending(x => x.EndTime).FirstOrDefault();
+        if(feature != null)
+        {
+            int numDaysAvailable = inputModel.TimeLimitDays - feature.EndTime;
+            int numUsersBenefit = inputModel.Features.Where(x => x.Name == feature.FeatureName).FirstOrDefault().NumUsersBenefit;
+            if (numDaysAvailable < 0) numDaysAvailable = 0;
+            score += (numDaysAvailable * numUsersBenefit);
+        }
+    } 
+    return score;
 }
 
 static List<FeatureModel> ProcessFeatures(InputModel inputModel)
@@ -72,6 +113,10 @@ static List<FeatureModel> GetDoableFeatures(List<Engineers> engineers, int engin
 {
     List<FeatureModel> availableFeatures = new List<FeatureModel>();
     var engineer = engineers.Where(x => x.Id == engineerId).FirstOrDefault();
+
+    if (engineer.BusyUntil > day && engineer.BusyUntil != 0)
+        return availableFeatures;
+
 
     foreach(var feature in features)
     {
@@ -138,7 +183,7 @@ static int GetNumberOfEnginnersWorkingOnCurrentBinary(Binary binary, List<Engine
         {
             foreach(var operation in engineer.Operations)
             {
-                if(binary.Id == operation.BinaryId && (time >= operation.StartTime && time <= operation.EndTime))
+                if(binary.Id == operation.BinaryId && (time >= operation.StartTime && time < operation.EndTime))
                 {
                     numEngineers++;
                 }
