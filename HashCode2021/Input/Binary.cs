@@ -4,10 +4,12 @@
     {
         public int Id { get; set; }
         public List<Service> Services { get; set; }
+        public bool Done { get; set; }
         public Binary(int Id)
         {
             this.Id = Id;
             Services = new List<Service>();
+            this.Done = false;
         }
 
         public Binary()

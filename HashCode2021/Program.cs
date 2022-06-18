@@ -1,7 +1,7 @@
 ﻿using HashCode2021;
 using HashCode2021.Input;
 
-var inputModel = ReadFile(@"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\expectation_maximisation.txt");
+var inputModel = ReadFile(@"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\five_thousand.txt");
 InitialSolution1(inputModel);
 
 static void InitialSolution1(InputModel input)
@@ -13,18 +13,19 @@ static void InitialSolution1(InputModel input)
         initialSolution.Add(enginner);
     }
 
-    List<string> processedFeatures = new List<string>();
     var features = ProcessFeatures(input);
     var binaries = input.Binaries;
+    //todo change FeatureModel to List<Binaries>
     for (int i = 0; i < input.TimeLimitDays; i++)
     {
         foreach(var engineer in initialSolution)
         {
-            var doableFeatures = GetDoableFeatures(initialSolution, engineer.Id, features.Where(x => x.Feature.Done == false).ToList(), i);
+            var doableFeatures = GetDoableFeatures(initialSolution, engineer.Id, features.ToList(), i);
             if (doableFeatures.Count > 0)
             {
-                var toDoFeature = doableFeatures.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
-                var featureBinary = toDoFeature.Binary;
+                var toDoFeature = GetFeatureWithLeastBinaries(binaries, doableFeatures.ToList());
+                //var toDoFeature = doableFeatures.OrderBy(x => x.Binaries.Count).FirstOrDefault();
+                var featureBinary = toDoFeature.Binaries.FirstOrDefault();
                 var feature = toDoFeature.Feature;
                 var featureTime = GetFeatureTime(feature, featureBinary, initialSolution, i);
 
@@ -41,7 +42,9 @@ static void InitialSolution1(InputModel input)
                         FeatureName = feature.Name,
                         Operation = $"impl {feature.Name} {featureBinary.Id}"
                     });
-                    toDoFeature.Feature.Done = true;
+                    //todo remove binary from feature
+                    features.Where(x => x.Feature.Name == feature.Name).FirstOrDefault().Binaries.Where(x => x.Id == featureBinary.Id).FirstOrDefault().Done = true;
+                    //featureBinary.Done = true;
                 }
                 
             }
@@ -69,6 +72,7 @@ static void InitialSolution1(InputModel input)
 
 static int CalculateScore(List<Engineers> engineers, InputModel inputModel)
 {
+    //to check if feature is implemented in all required binaries (with feature services)
     int score = 0;
     List<EnginnerOperation> operations = new List<EnginnerOperation>();
     foreach(var engineer in engineers)
@@ -79,11 +83,15 @@ static int CalculateScore(List<Engineers> engineers, InputModel inputModel)
     var operations1 = operations.GroupBy(x => x.FeatureName).ToList();
     foreach(var data in operations1)
     {
+            
         var feature = data.OrderByDescending(x => x.EndTime).FirstOrDefault();
+        var inputFeature = inputModel.Features.Where(x => x.Name == feature.FeatureName).FirstOrDefault();
+        var numBinaries = BinariesWithFeatureServices(inputFeature, inputModel.Binaries);
+        if (data.Count() != numBinaries.Count) continue;
         if(feature != null)
         {
             int numDaysAvailable = inputModel.TimeLimitDays - feature.EndTime;
-            int numUsersBenefit = inputModel.Features.Where(x => x.Name == feature.FeatureName).FirstOrDefault().NumUsersBenefit;
+            int numUsersBenefit = inputFeature.NumUsersBenefit;
             if (numDaysAvailable < 0) numDaysAvailable = 0;
             score += (numDaysAvailable * numUsersBenefit);
         }
@@ -98,10 +106,12 @@ static List<FeatureModel> ProcessFeatures(InputModel inputModel)
     var binaries = inputModel.Binaries;
     foreach(var feature in features)
     {
-        var featureBinaries = BinariesWithFeatureServices(feature, binaries);
+        var featureBinaries = BinariesWithFeatureServices(feature, binaries).ToList();
+        //if (featureBinaries.Count == 0) continue;
+        proccessedFeatures.Add(new FeatureModel { Feature = feature.Clone(), Binaries = new List<Binary>() });
         foreach(var binary in featureBinaries)
         {
-            proccessedFeatures.Add(new FeatureModel { Feature = feature.Clone(), Binary = binary.Clone() });
+            proccessedFeatures[proccessedFeatures.Count - 1].Binaries.Add(binary.Clone());
         }
     }
 
@@ -111,6 +121,12 @@ static List<FeatureModel> ProcessFeatures(InputModel inputModel)
 
 static List<FeatureModel> GetDoableFeatures(List<Engineers> engineers, int engineerId, List<FeatureModel> features, int day)
 {
+    features = features.Select(x => new FeatureModel
+    {
+        Feature = x.Feature.Clone(),
+        Binaries = x.Binaries.Where(x => x.Done == false).ToList()
+    }).ToList();
+    features = features.Where(x => x.Binaries.Count > 0).ToList();
     List<FeatureModel> availableFeatures = new List<FeatureModel>();
     var engineer = engineers.Where(x => x.Id == engineerId).FirstOrDefault();
 
@@ -118,19 +134,38 @@ static List<FeatureModel> GetDoableFeatures(List<Engineers> engineers, int engin
         return availableFeatures;
 
 
-    foreach(var feature in features)
+    foreach (var feature in features)
     {
-        int count = 0;
-        foreach (var worker in engineers)
+        foreach (var binary in feature.Binaries) 
         {
-            foreach (var operation in worker.Operations)
+            int count = 0;
+            foreach (var worker in engineers)
             {
-                if (operation.FeatureName == feature.Feature.Name && operation.StartTime <= day && operation.EndTime >= day && feature.Binary.Id == operation.BinaryId)  //todo ---> check if can be done based on engineer day and feature difficulty
-                    count++;
+                foreach (var operation in worker.Operations)
+                {
+                    if (operation.FeatureName == feature.Feature.Name && operation.StartTime <= day && operation.EndTime >= day && binary.Id == operation.BinaryId)  //todo ---> check if can be done based on engineer day and feature difficulty
+                        count++;
+                }
             }
+            if (count == 0)
+            {
+                var existingFeature = availableFeatures.Where(x => x.Feature.Name == feature.Feature.Name).FirstOrDefault();
+                if(existingFeature != null)
+                {
+                    existingFeature.Binaries.Add(binary);
+                }
+                else
+                {
+                    availableFeatures.Add(new FeatureModel
+                    {
+                        Feature = feature.Feature,
+                        Binaries = new List<Binary> { binary }
+                    });
+                }
+            }
+                
         }
-        if (count == 0)
-            availableFeatures.Add(feature);
+        
     }
     return availableFeatures;
 }
@@ -153,17 +188,17 @@ static void SaveSolution(List<Engineers> solution, string filePath)
         }
     }
 }
-static Features GetFeatureWithLeastBinaries(List<Binary> binaries, List<Features> features)
+static FeatureModel GetFeatureWithLeastBinaries(List<Binary> binaries, List<FeatureModel> featuresModel)
 {
     int numBinaries = int.MaxValue;
-    var bestFeature = new Features();
-    foreach(var feature in features)
+    var bestFeature = new FeatureModel();
+    foreach(var featureModel in featuresModel)
     {
-       var toUseBinaries = BinariesWithFeatureServices(feature, binaries);
+       var toUseBinaries = BinariesWithFeatureServices(featureModel.Feature, binaries);
        if(toUseBinaries.Count < numBinaries)
        {
             numBinaries = toUseBinaries.Count;
-            bestFeature = feature.Clone();
+            bestFeature = featureModel.Clone();
        }
     }
     return bestFeature;
