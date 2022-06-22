@@ -6,13 +6,14 @@ namespace HashCode2021
     {
         public Features Feature { get; set; }
         public List<Binary> Binaries { get; set; }
-
+        public Dictionary<int,int> FeatureBinaryTime { get; set; }
+        public int FeatureTimeBinary { get; set; }
         public FeatureModel Clone()
         {
             var binaries = new List<Binary>();
             foreach(var bin in this.Binaries)
                 binaries.Add(bin.Clone());
-            
+
             return new FeatureModel
             {
                 Feature = this.Feature.Clone(),
