@@ -1,7 +1,7 @@
 ﻿using HashCode2021;
 using HashCode2021.Input;
 
-var inputModel = ReadFile(@"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\distinction.txt");
+var inputModel = ReadFile(@"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\breadth_of_choice.txt");
 InitialSolution1(inputModel);
 
 ///
@@ -23,6 +23,7 @@ InitialSolution1(inputModel);
     var binaries = input.Binaries;
     features = ProcessFeatures(input);
     var rnd = new Random();
+    Dictionary<int, List<FeatureModel>> engineersFeature = new Dictionary<int, List<FeatureModel>>();
     List<FeatureModel> doableFeatures = null;
     int count = 0;
     //todo change FeatureModel to List<Binaries>
@@ -39,16 +40,15 @@ InitialSolution1(inputModel);
             //    features = ProcessFeatures(inputModel);
             //}
 
-            doableFeatures = GetDoableFeatures(initialSolution, engineer.Id, features.ToList(), i);
+            if(!engineersFeature.ContainsKey(engineer.Id))
+                engineersFeature = GetDoableFeatures(engineersFeature, initialSolution, engineer.Id, features.ToList(), i);
 
+            doableFeatures = engineersFeature[engineer.Id];
             if (doableFeatures.Count > 0)
             {
                 int random = rnd.Next() % 10;
                 FeatureModel toDoFeature = null;
-                if(random < 5)
-                    toDoFeature = doableFeatures.OrderBy(x => x.Services.Count()).FirstOrDefault();
-                else
-                    toDoFeature = doableFeatures.OrderBy(x => x.Binaries.Count()).FirstOrDefault();
+                toDoFeature = doableFeatures.OrderByDescending(x => (x.Feature.NumUsersBenefit / (x.Feature.Difficulty + (x.Feature.Services.Count * x.Feature.Services.Count)))).FirstOrDefault();
                 //var toDoFeature = GetFeatureWithLeastBinaries(binaries, doableFeatures.ToList());
                 var feature = toDoFeature.Feature;
 
@@ -64,7 +64,7 @@ InitialSolution1(inputModel);
                     //todo remove binary from feature
                     features.Where(x => x.Feature.Name == feature.Name).FirstOrDefault().Binaries.Where(x => x.Id == featureBinary.Id).FirstOrDefault().Done = true;
                     //featureBinary.Done = true;
-                    doableFeatures.Remove(toDoFeature);
+                    RemoveFeatureFromFeatureList(engineersFeature, toDoFeature);
                 }
                 
             }
@@ -72,9 +72,8 @@ InitialSolution1(inputModel);
             {
                 if (engineer.BusyUntil <= i)
                 {
-                    //Wait(engineer, i, i + 1);
-                    //engineer.BusyUntil = i + 1;
-                    int x = 2;
+                    Wait(engineer, i, i + 1);
+                    engineer.BusyUntil = i + 1;
                 }
             }
         }
@@ -83,6 +82,15 @@ InitialSolution1(inputModel);
     SaveSolution(initialSolution, @"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Solutions\an_example.txt");
     int score = CalculateScore(initialSolution, input);
     Console.WriteLine("Score:"+score);
+}
+
+void RemoveFeatureFromFeatureList(Dictionary<int, List<FeatureModel>> engineersFeature,FeatureModel feature)
+{
+    foreach(var elem in engineersFeature)
+    {
+        var toRemove = elem.Value.Where(x => x.Feature.Name == feature.Feature.Name).FirstOrDefault();
+        elem.Value.Remove(toRemove);
+    }
 }
 
 void performMoveService(int limit, List<FeatureModel> features, InputModel input, Engineers engineer)
@@ -257,7 +265,7 @@ static List<FeatureModel> ProcessFeatures(InputModel inputModel)
 ///
 ///Get features that can be done
 ///
-static List<FeatureModel> GetDoableFeatures(List<Engineers> engineers, int engineerId, List<FeatureModel> features, int day)
+static Dictionary<int,List<FeatureModel>> GetDoableFeatures(Dictionary<int, List<FeatureModel>>  currentDict, List<Engineers> engineers, int engineerId, List<FeatureModel> features, int day)
 {
     features = features.Select(x => new FeatureModel
     {
@@ -272,7 +280,7 @@ static List<FeatureModel> GetDoableFeatures(List<Engineers> engineers, int engin
     var engineer = engineers.Where(x => x.Id == engineerId).FirstOrDefault();
 
     if (engineer.BusyUntil > day && engineer.BusyUntil != 0)
-        return availableFeatures;
+        return currentDict;
 
     foreach (var feature in features)
     {
@@ -305,7 +313,9 @@ static List<FeatureModel> GetDoableFeatures(List<Engineers> engineers, int engin
                 
         }
     }
-    return availableFeatures;
+
+    currentDict.Add(engineer.Id, availableFeatures);
+    return currentDict;
 }
 
 static void SaveSolution(List<Engineers> solution, string filePath)
