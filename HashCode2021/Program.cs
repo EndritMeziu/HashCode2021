@@ -1,7 +1,7 @@
 ﻿using HashCode2021;
 using HashCode2021.Input;
 
-var inputModel = ReadFile(@"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\five_thousand.txt");
+var inputModel = ReadFile(@"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\distinction.txt");
 InitialSolution1(inputModel);
 
 ///
@@ -16,43 +16,40 @@ InitialSolution1(inputModel);
         initialSolution.Add(enginner);
     }
 
-    int cnt = 0;
-    while (cnt++ < 50)
-    {
-        var rnd = new Random();
-        int rndNum = rnd.Next() % input.NumEngineers;
-        var engineer = input.Engineers.ElementAt(rndNum);
-        int rndBin1 = rnd.Next() % input.NumBinaries;
-        int rndBin2 = rnd.Next() % input.NumBinaries;
-        if (rndBin1 == rndBin2) cnt--;
-        else
-        {
-            var binary1 = input.Binaries.Where(x => x.Services.Count > 0).OrderByDescending(x => x.Services.Count).FirstOrDefault();
-            var binary2 = input.Binaries.OrderBy(x => x.Services.Count).Take(2).OrderBy(x => Guid.NewGuid()).FirstOrDefault();
-            var serviceName = binary1.Services.OrderBy(x => Guid.NewGuid()).FirstOrDefault()?.Name;
-            if (serviceName != null)
-            {
-                int moveTime = Math.Max(binary1.Services.Count(), binary2.Services.Count());
-                if (engineer.AvailableDays - moveTime >= 0)
-                    MoveService(inputModel, binary1.Id, binary2.Id, serviceName, engineer, engineer.BusyUntil);
-            }
-        }
-    }
-
     var features = ProcessFeatures(input);
+        
+   
+
     var binaries = input.Binaries;
+    features = ProcessFeatures(input);
+    var rnd = new Random();
+    List<FeatureModel> doableFeatures = null;
+    int count = 0;
     //todo change FeatureModel to List<Binaries>
     for (int i = 0; i < input.TimeLimitDays; i++)       
     {
+        count = i;
         foreach(var engineer in initialSolution)
         {
             if (engineer.BusyUntil > i)
                 continue;
-            var doableFeatures = GetDoableFeatures(initialSolution, engineer.Id, features.ToList(), i);
+            //if (rnd.Next() % 100 < 5 && i < input.TimeLimitDays / 10)
+            //{
+            //    performMoveService(1, features, input, engineer);
+            //    features = ProcessFeatures(inputModel);
+            //}
+
+            doableFeatures = GetDoableFeatures(initialSolution, engineer.Id, features.ToList(), i);
+
             if (doableFeatures.Count > 0)
             {
+                int random = rnd.Next() % 10;
+                FeatureModel toDoFeature = null;
+                if(random < 5)
+                    toDoFeature = doableFeatures.OrderBy(x => x.Services.Count()).FirstOrDefault();
+                else
+                    toDoFeature = doableFeatures.OrderBy(x => x.Binaries.Count()).FirstOrDefault();
                 //var toDoFeature = GetFeatureWithLeastBinaries(binaries, doableFeatures.ToList());
-                var toDoFeature = doableFeatures.OrderBy(x => x.Binaries.Count).Take(10).OrderBy(x => Guid.NewGuid()).FirstOrDefault();
                 var feature = toDoFeature.Feature;
 
                 var featureBinary = toDoFeature.Binaries.FirstOrDefault();
@@ -66,7 +63,8 @@ InitialSolution1(inputModel);
                     ImplementFeature(engineer, feature, featureBinary, i, endTime);
                     //todo remove binary from feature
                     features.Where(x => x.Feature.Name == feature.Name).FirstOrDefault().Binaries.Where(x => x.Id == featureBinary.Id).FirstOrDefault().Done = true;
-                    //featureBinary.Done = true;               
+                    //featureBinary.Done = true;
+                    doableFeatures.Remove(toDoFeature);
                 }
                 
             }
@@ -87,10 +85,47 @@ InitialSolution1(inputModel);
     Console.WriteLine("Score:"+score);
 }
 
- void MoveService(InputModel inputModel, int firstBinaryId, int secondBinaryId, string serviceName, Engineers engineer, int startTime)
+void performMoveService(int limit, List<FeatureModel> features, InputModel input, Engineers engineer)
 {
-    var firstBinary = inputModel.Binaries.Where(x => x.Id == firstBinaryId).FirstOrDefault();
-    var secondBinary = inputModel.Binaries.Where(x => x.Id == secondBinaryId).FirstOrDefault();
+    var toMoveServices = new List<string>();
+    var rnd = new Random();
+
+    var selectedFeatures = features.OrderByDescending(x => x.Services.Count()).Take(limit).ToList();
+
+    foreach (var feature in selectedFeatures)
+    {
+        int number = rnd.Next() % feature.Services.Count();
+        for (int i = 0; i < number; i++)
+        {
+            toMoveServices.Add(feature.Services[i]);
+            if (toMoveServices.Count >= limit)
+                break;
+        }
+
+        if (toMoveServices.Count >= limit)
+            break;
+    }
+
+    foreach (var toMoveService in toMoveServices)
+    {
+        if (!string.IsNullOrEmpty(toMoveService))
+        {
+            int rndNum = rnd.Next() % input.NumEngineers;
+            var binary = input.Binaries.Where(x => x.Services.Select(x => x.Name).Contains(toMoveService)).FirstOrDefault();
+            var toMoveBinary = input.Binaries.OrderBy(x => x.Services.Count).FirstOrDefault();
+            if (binary != null && toMoveBinary != null)
+            {
+                int moveTime = Math.Max(binary.Services.Count(), toMoveBinary.Services.Count());
+                if (engineer.AvailableDays - moveTime >= 0)
+                    MoveService(inputModel, binary, toMoveBinary, toMoveService, engineer, engineer.BusyUntil);
+            }
+            Thread.Sleep(20);
+        }
+    }
+}
+
+ void MoveService(InputModel inputModel, Binary firstBinary, Binary secondBinary, string serviceName, Engineers engineer, int startTime)
+{
     var firstBinaryService = firstBinary.Services.Where(x => x.Name == serviceName).FirstOrDefault();
     int moveTime = Math.Max(firstBinary.Services.Count(), secondBinary.Services.Count());
 
@@ -102,7 +137,7 @@ InitialSolution1(inputModel);
         BinaryId = -1,
         StartTime = startTime,
         EndTime = startTime+moveTime,
-        Operation = $"move {serviceName} {secondBinaryId}"
+        Operation = $"move {serviceName} {secondBinary.Id}"
     });
     engineer.AvailableDays -= moveTime;
     engineer.BusyUntil += moveTime;
@@ -202,7 +237,8 @@ static List<FeatureModel> ProcessFeatures(InputModel inputModel)
             Feature = feature.Clone(), 
             Binaries = new List<Binary>(),
             FeatureBinaryTime = new Dictionary<int, int>(),
-            FeatureTimeBinary = 0
+            FeatureTimeBinary = 0,
+            Services = feature.Services.Select(x => x.Name).ToList()
         });
         foreach(var binary in featureBinaries)
         {
@@ -227,7 +263,8 @@ static List<FeatureModel> GetDoableFeatures(List<Engineers> engineers, int engin
     {
         Feature = x.Feature.Clone(),
         Binaries = x.Binaries.Where(x => x.Done == false).ToList(),
-        FeatureBinaryTime = x.FeatureBinaryTime
+        FeatureBinaryTime = x.FeatureBinaryTime,
+        Services = x.Services
     }).ToList();
 
     features = features.Where(x => x.Binaries.Count > 0).ToList();
@@ -237,14 +274,13 @@ static List<FeatureModel> GetDoableFeatures(List<Engineers> engineers, int engin
     if (engineer.BusyUntil > day && engineer.BusyUntil != 0)
         return availableFeatures;
 
-
     foreach (var feature in features)
     {
         foreach (var binary in feature.Binaries) 
         {
-            var existingFeature = availableFeatures.Where(x => x.Feature.Name == feature.Feature.Name).FirstOrDefault();
             if (feature.FeatureBinaryTime[binary.Id] <= engineer.AvailableDays && binary.NotAvailableUntil <= day)
             {
+                var existingFeature = availableFeatures.Where(x => x.Feature.Name == feature.Feature.Name).FirstOrDefault();
                 if (existingFeature != null)
                 {
                     existingFeature.Binaries.Add(binary);
@@ -261,7 +297,8 @@ static List<FeatureModel> GetDoableFeatures(List<Engineers> engineers, int engin
                         Feature = feature.Feature,
                         Binaries = new List<Binary> { binary },
                         FeatureBinaryTime = featureBinaryTime,
-                        FeatureTimeBinary = feature.FeatureBinaryTime[binary.Id]
+                        FeatureTimeBinary = feature.FeatureBinaryTime[binary.Id],
+                        Services = feature.Services
                     });
                 }
             }
