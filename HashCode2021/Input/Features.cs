@@ -2,7 +2,7 @@
 {
     public class Features
     {
-        public Features(string Name,int Difficulty,int NumServices,int NumUserBenefit)
+        public Features(string Name, int NumServices, int Difficulty, int NumUserBenefit)
         {
             this.Name = Name;
             this.Difficulty = Difficulty;

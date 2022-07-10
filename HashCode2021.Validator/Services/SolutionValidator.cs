@@ -10,31 +10,11 @@ namespace HashCode2021.Validator.Services
         public bool isValidSolution(string instancePath, string solutionPath)
         {
             var inputFile = ReadInputFile(instancePath);
-            var solutionFile = ReadSolutionFile(solutionPath);
-            foreach(var enginner in solutionFile.Enginners)
-            {
-                int startDay = 0;
-                foreach(var operation in enginner.Operations)
-                {
-                    if(operation.Operation.StartsWith("wait"))
-                    {
-                        operation.StartTime = startDay;
-                        operation.EndTime = startDay+ 1;
-                        startDay++;
-                        continue;
-                    }
-                    var implementedFeature = inputFile.Features.Where(x => x.Name == operation.FeatureName).FirstOrDefault();
-                    var featureBinary = inputFile.Binaries.Where(x => x.Id == operation.BinaryId).FirstOrDefault();
-                    var featureTime = SolutionHelpers.GetFeatureTime(implementedFeature, featureBinary, solutionFile.Enginners, startDay);
-                    operation.StartTime = startDay;
-                    operation.EndTime = startDay + featureTime;
-                    startDay = operation.EndTime;
-                }
-            }
-
-
+            var solutionFile = ReadSolutionFile(solutionPath, inputFile);
             //check each feature for each enginner if is being done by 2+ in same binary
             var result = SolutionHelpers.CheckTaskSchedulingBetweenEngineers(solutionFile);
+
+            
 
             return result;
         }
@@ -104,7 +84,13 @@ namespace HashCode2021.Validator.Services
             return inputModel;
         }
 
-        public SolutionFile ReadSolutionFile(string solutionPath)
+        /// <summary>
+        ///  Constructs Solution using solution path and inputModel
+        /// </summary>
+        /// <param name="solutionPath"></param>
+        /// <param name="inputModel"></param>
+        /// <returns></returns>
+        public SolutionFile ReadSolutionFile(string solutionPath, InputModel inputModel)
         {
             var solutionLines = File.ReadAllLines(solutionPath);
             int numWorkingEngineers = int.Parse(solutionLines[0]);
@@ -123,29 +109,51 @@ namespace HashCode2021.Validator.Services
             for (int i = 1; i < solutionLines.Length; i++)
             {
                 var solutionLine = solutionLines[i];
-                if (solutionLine.Length == 1)
+                if (solutionLine.Split(' ').Count() == 1)
                 {
                     int enginnerNumOperations = int.Parse(solutionLine);
                     var enginner = solutionFile.Enginners.Where(x => x.Operations.Count == 0).FirstOrDefault();
+                    int startTime = 0;
                     for (int j = i + 1; j <= i + enginnerNumOperations; j++)
                     {
                         var operationArray = solutionLines[j].Split(' ');
                         var featureName = string.Empty;
                         var binary = -1;
+
+                        if (enginner.Operations.Count > 0)
+                        {
+                            startTime = enginner.Operations.ElementAt(enginner.Operations.Count - 1).EndTime;
+                        }
+
                         if (operationArray.Length == 3)
                         {
                             binary = int.Parse(operationArray[2]);
                             featureName = operationArray[1];
+                            
+                            var feature = inputModel.Features.Where(x => x.Name == featureName).FirstOrDefault();
+                            var endTime = startTime + GetFeatureTime(feature, inputModel.Binaries.Where(x => x.Id == binary).FirstOrDefault(), solutionFile.Enginners, startTime);
+                            enginner.Operations.Add(new EnginnerOperation()
+                            {
+                                BinaryId = binary,
+                                StartTime = startTime,
+                                EndTime = endTime,
+                                FeatureName = featureName,
+                                Operation = solutionLines[j]
+                            });
+                        }
+                        else if(operationArray.Length == 2)
+                        {
+                            //wait op
+                            enginner.Operations.Add(new EnginnerOperation
+                            {
+                                BinaryId = -1,
+                                StartTime = startTime,
+                                EndTime = startTime + int.Parse(operationArray[1]),
+                                FeatureName = string.Empty,
+                                Operation = solutionLines[j]
+                            });
                         }
 
-                        enginner.Operations.Add(new EnginnerOperation()
-                        {
-                            BinaryId = binary,
-                            StartTime = -1,
-                            EndTime = -1,
-                            FeatureName = featureName,
-                            Operation = solutionLines[j]
-                        });
                     }
                     i += enginnerNumOperations;
                 }
@@ -160,6 +168,43 @@ namespace HashCode2021.Validator.Services
 
             bool isNum = Double.TryParse(Convert.ToString(Expression), System.Globalization.NumberStyles.Any, System.Globalization.NumberFormatInfo.InvariantInfo, out retNum);
             return isNum;
+        }
+
+        static int GetFeatureTime(Features feature, Binary binary, List<Engineers> engineers, int time)
+        {
+            return feature.Difficulty + binary.Services.Count + GetNumberOfEnginnersWorkingOnCurrentBinary(binary, engineers, time);
+        }
+
+
+        static int GetNumberOfEnginnersWorkingOnCurrentBinary(Binary binary, List<Engineers> engineers, int time)
+        {
+            
+            int numEngineers = 0;
+            foreach (var engineer in engineers)
+            {
+                if (engineer.Operations.Count > 0)
+                {
+                    foreach (var operation in engineer.Operations)
+                    {
+                        if(operation.StartTime == 0 && operation.EndTime == 15 && binary.Id == 0)
+                        {
+                            int x = 2;
+                        }
+                        if (binary.Id == operation.BinaryId && (time >= operation.StartTime && time < operation.EndTime))
+                        {
+                            numEngineers++;
+                        }
+                    }
+                }
+            }
+            return numEngineers;
+        }
+
+        public int CalculateScore(string instancePath, string solutionPath)
+        {
+            var inputModel = ReadInputFile(instancePath);
+            var solutionFile = ReadSolutionFile(solutionPath, inputModel);
+            return SolutionHelpers.CalculateScore(solutionFile.Enginners, inputModel);
         }
         #endregion
     }

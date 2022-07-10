@@ -6,6 +6,7 @@ namespace HashCode2021.Validator.Interfaces
     {
         bool isValidSolution(string instancePath, string solutionPath);
         InputModel ReadInputFile(string instancePath);
-        SolutionFile ReadSolutionFile(string solutionPath);
+        SolutionFile ReadSolutionFile(string solutionPath, InputModel inputModel);
+        int CalculateScore(string instancePath, string solutionPath);
     }
 }

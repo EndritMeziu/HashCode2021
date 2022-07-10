@@ -6,12 +6,14 @@
         public List<Service> Services { get; set; }
         public bool Done { get; set; }
         public int NotAvailableUntil { get; set; } //handle not selected while moving services
+        public int EngineerWorkingUntil { get; set; }
         public Binary(int Id)
         {
             this.Id = Id;
             Services = new List<Service>();
             this.Done = false;
-            this.NotAvailableUntil = -1;
+            this.NotAvailableUntil = 0;
+            this.EngineerWorkingUntil = 0;
         }
 
         public Binary()
