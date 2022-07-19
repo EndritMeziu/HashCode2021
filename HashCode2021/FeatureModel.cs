@@ -9,6 +9,7 @@ namespace HashCode2021
         public List<string> Services { get; set; }
         public Dictionary<int,int> FeatureBinaryTime { get; set; }
         public int FeatureTimeBinary { get; set; }
+        public int FeatureTotalTime { get; set; }
         public FeatureModel Clone()
         {
             var binaries = new List<Binary>();

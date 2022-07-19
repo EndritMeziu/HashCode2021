@@ -99,63 +99,62 @@ namespace HashCode2021.Validator.Services
             {
                 solutionFile.Enginners.Add(new Engineers(i)
                 {
-                    AvailableDays = -1,
-                    BusyUntil = -1,
+                    AvailableDays = inputModel.TimeLimitDays,
+                    BusyUntil = 0,
                     Operations = new List<EnginnerOperation>()
                 });
             }
 
-
+            var createBinaryOperations = solutionLines.Where(x => x.StartsWith("new")).ToList();
             for (int i = 1; i < solutionLines.Length; i++)
             {
                 var solutionLine = solutionLines[i];
                 if (solutionLine.Split(' ').Count() == 1)
                 {
-                    int enginnerNumOperations = int.Parse(solutionLine);
-                    var enginner = solutionFile.Enginners.Where(x => x.Operations.Count == 0).FirstOrDefault();
+                    int engineerNumOperations = int.Parse(solutionLine);
+                    var engineer = solutionFile.Enginners.Where(x => x.Operations.Count == 0).FirstOrDefault();
                     int startTime = 0;
-                    for (int j = i + 1; j <= i + enginnerNumOperations; j++)
+                    for (int j = i + 1; j <= i + engineerNumOperations; j++)
                     {
                         var operationArray = solutionLines[j].Split(' ');
                         var featureName = string.Empty;
                         var binary = -1;
 
-                        if (enginner.Operations.Count > 0)
+                        if(operationArray.Count() == 1)
                         {
-                            startTime = enginner.Operations.ElementAt(enginner.Operations.Count - 1).EndTime;
+                            //new
+                            engineer.Operations.Add(new EnginnerOperation
+                            {
+                                BinaryId = -1,
+                                Operation = solutionLines[j]
+                            });
                         }
-
-                        if (operationArray.Length == 3)
+                        else if(operationArray.Count() == 2)
                         {
+                            //wait
+                            engineer.Operations.Add(new EnginnerOperation
+                            {
+                                BinaryId = -1,
+                                Operation = solutionLines[j]
+                            });
+                        }
+                        else if(operationArray.Count() == 3)
+                        {
+                            //impl and move
+
                             binary = int.Parse(operationArray[2]);
                             featureName = operationArray[1];
-                            
-                            var feature = inputModel.Features.Where(x => x.Name == featureName).FirstOrDefault();
-                            var endTime = startTime + GetFeatureTime(feature, inputModel.Binaries.Where(x => x.Id == binary).FirstOrDefault(), solutionFile.Enginners, startTime);
-                            enginner.Operations.Add(new EnginnerOperation()
+                            engineer.Operations.Add(new EnginnerOperation()
                             {
                                 BinaryId = binary,
-                                StartTime = startTime,
-                                EndTime = endTime,
                                 FeatureName = featureName,
                                 Operation = solutionLines[j]
                             });
                         }
-                        else if(operationArray.Length == 2)
-                        {
-                            //wait op
-                            enginner.Operations.Add(new EnginnerOperation
-                            {
-                                BinaryId = -1,
-                                StartTime = startTime,
-                                EndTime = startTime + int.Parse(operationArray[1]),
-                                FeatureName = string.Empty,
-                                Operation = solutionLines[j]
-                            });
-                        }
+
 
                     }
-                    i += enginnerNumOperations;
+                    i += engineerNumOperations;
                 }
             }
             return solutionFile;
@@ -178,7 +177,6 @@ namespace HashCode2021.Validator.Services
 
         static int GetNumberOfEnginnersWorkingOnCurrentBinary(Binary binary, List<Engineers> engineers, int time)
         {
-            
             int numEngineers = 0;
             foreach (var engineer in engineers)
             {
@@ -186,10 +184,6 @@ namespace HashCode2021.Validator.Services
                 {
                     foreach (var operation in engineer.Operations)
                     {
-                        if(operation.StartTime == 0 && operation.EndTime == 15 && binary.Id == 0)
-                        {
-                            int x = 2;
-                        }
                         if (binary.Id == operation.BinaryId && (time >= operation.StartTime && time < operation.EndTime))
                         {
                             numEngineers++;
@@ -204,7 +198,120 @@ namespace HashCode2021.Validator.Services
         {
             var inputModel = ReadInputFile(instancePath);
             var solutionFile = ReadSolutionFile(solutionPath, inputModel);
+
+            Dictionary<int, int> engineerOperationMapping = new Dictionary<int, int>();
+            foreach(var enginneer in solutionFile.Enginners)
+            {
+                engineerOperationMapping.Add(enginneer.Id, 0);
+            }
+
+            for (int i = 0; i < inputModel.TimeLimitDays; i++)
+            {
+                foreach(var engineer in solutionFile.Enginners)
+                {
+                    if (engineer.BusyUntil > i)
+                        continue;
+
+                    int operationIndex = engineerOperationMapping[engineer.Id];
+                    EnginnerOperation operation;
+                    if (engineer.Operations.Count() > operationIndex)
+                        operation = engineer.Operations.ElementAt(operationIndex);
+                    else
+                        continue;
+                    
+                    //wait
+                    if(operation.Operation.Contains("wait"))
+                    {
+                        operation.StartTime = i;
+                        operation.EndTime = i + int.Parse(operation.Operation.Split(' ')[1]);
+                        engineer.BusyUntil += int.Parse(operation.Operation.Split(' ')[1]);
+                        engineer.AvailableDays -= int.Parse(operation.Operation.Split(' ')[1]);
+                    }
+                    else if (operation.Operation.Contains("impl"))
+                    {
+                        var feature = inputModel.Features.Where(x => x.Name == operation.FeatureName).FirstOrDefault();
+                        var binary = inputModel.Binaries.Where(x => x.Id == operation.BinaryId.Value).FirstOrDefault();
+                        if (feature.Name == "sbafaddd" && binary.Id == 67)
+                            continue;
+                        var featureTime = GetFeatureTime(feature, binary, solutionFile.Enginners, i);
+                        operation.StartTime = i;
+                        operation.EndTime = i + featureTime;
+                        engineer.AvailableDays -= featureTime;
+                        engineer.BusyUntil = i + featureTime;
+                        binary.EngineerWorkingUntil = Math.Max(binary.EngineerWorkingUntil, operation.EndTime);
+                    }
+                    else if(operation.Operation.Contains("move"))
+                    {
+                        var toMoveService = operation.Operation.Split(' ')[1];
+                        var fromBinary = inputModel.Binaries.Where(x => x.Services.Select(x => x.Name).Contains(toMoveService)).FirstOrDefault();
+                        var toBinary = inputModel.Binaries.Where(x => x.Id == int.Parse(operation.Operation.Split(' ')[2])).FirstOrDefault();
+                        int moveTime = Math.Max(fromBinary.Services.Count(), toBinary.Services.Count());
+                        operation.StartTime = i;
+                        operation.EndTime = i + moveTime;
+                        engineer.AvailableDays -= moveTime;
+                        engineer.BusyUntil += moveTime;
+                        fromBinary.NotAvailableUntil = Math.Max(fromBinary.NotAvailableUntil, i + moveTime);
+                        toBinary.NotAvailableUntil += Math.Max(toBinary.NotAvailableUntil, i + moveTime);
+                        MoveService(inputModel, fromBinary, toBinary, toMoveService, engineer, i);
+
+                    }
+                    else if(operation.Operation.Contains("new"))
+                    {
+                        operation.StartTime = i;
+                        operation.EndTime = i + inputModel.TimeToCreateBinary;
+                        engineer.BusyUntil = i + inputModel.TimeToCreateBinary;
+                        engineer.AvailableDays -= inputModel.TimeToCreateBinary;
+                        CreateBinary(inputModel, engineer, i);
+                    }
+                    engineerOperationMapping[engineer.Id] += 1;
+                    //new
+                }
+            }
+
+            foreach(var engineer in solutionFile.Enginners)
+            {
+                Console.WriteLine(engineer.Operations.Count);
+                foreach(var operation in engineer.Operations)
+                {
+                    Console.WriteLine($"[{operation.Operation}] {operation.StartTime} -> {operation.EndTime}");
+                }
+            }
+            Console.WriteLine();
+            Console.WriteLine("Score: " + SolutionHelpers.CalculateScore(solutionFile.Enginners, inputModel));
             return SolutionHelpers.CalculateScore(solutionFile.Enginners, inputModel);
+        }
+
+        static int CreateBinary(InputModel inputModel, Engineers engineers, int startTime)
+        {
+            if (engineers.AvailableDays - inputModel.TimeToCreateBinary < 0)
+                return -1;
+
+            var lastBinaryId = inputModel.Binaries.OrderByDescending(x => x.Id).FirstOrDefault().Id;
+            inputModel.Binaries.Add(new Binary
+            {
+                Services = new List<Service>(),
+                Done = false,
+                Id = lastBinaryId + 1
+            });
+
+            inputModel.NumBinaries++;
+            return lastBinaryId + 1;
+        }
+
+        void MoveService(InputModel inputModel, Binary firstBinary, Binary secondBinary, string serviceName, Engineers engineer, int startTime)
+        {
+
+            if (firstBinary.EngineerWorkingUntil <= startTime && secondBinary.EngineerWorkingUntil <= startTime)
+            {
+                var firstBinaryService = firstBinary.Services.Where(x => x.Name == serviceName).FirstOrDefault();
+                int moveTime = Math.Max(firstBinary.Services.Count(), secondBinary.Services.Count());
+
+                if (engineer.AvailableDays - moveTime >= 0)
+                {
+                    firstBinary.Services.Remove(firstBinaryService);
+                    secondBinary.Services.Add(firstBinaryService);
+                }
+            }
         }
         #endregion
     }

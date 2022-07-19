@@ -1,6 +1,6 @@
 ﻿namespace HashCode2021.Input
 {
-    public class Binary
+    public class Binary : ICloneable
     {
         public int Id { get; set; }
         public List<Service> Services { get; set; }
@@ -26,7 +26,19 @@
             return new Binary()
             {
                 Services = this.Services,
-                Id = this.Id
+                Id = this.Id,
+                NotAvailableUntil = this.NotAvailableUntil,
+                EngineerWorkingUntil = this.EngineerWorkingUntil
+            };
+        }
+        object ICloneable.Clone()
+        {
+            return new Binary()
+            {
+                Services = this.Services,
+                Id = this.Id,
+                NotAvailableUntil = this.NotAvailableUntil,
+                EngineerWorkingUntil = this.EngineerWorkingUntil
             };
         }
     }
