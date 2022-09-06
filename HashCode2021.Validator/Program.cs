@@ -6,14 +6,8 @@ var serviceProvider = RegisterDependencies();
 var instancePath = @"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\five_thousand.txt";
 var solutionPath = @"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Solutions\an_example.txt";
 var _solutionValidator = serviceProvider.GetRequiredService<ISolutionValidator>();
-var result = _solutionValidator.isValidSolution(instancePath, solutionPath);
+Console.WriteLine("Score:" + _solutionValidator.CalculateScore(instancePath, solutionPath));
 
-if(result)
-{
-    Console.WriteLine("Solution is valid");
-    Console.WriteLine("Score:" + _solutionValidator.CalculateScore(instancePath, solutionPath));
-
-}
 
 
 #region RegisterDependencies

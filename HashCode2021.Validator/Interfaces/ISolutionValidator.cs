@@ -1,4 +1,4 @@
-﻿using HashCode2021.Validator.Models;
+﻿using HashCode2021.Models;
 
 namespace HashCode2021.Validator.Interfaces
 {

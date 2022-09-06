@@ -1,16 +1,14 @@
 ﻿using HashCode2021.Input;
-using HashCode2021.ProcessingModels;
-using HashCode2021.Validator.Helpers;
-using HashCode2021.Validator.Interfaces;
 using HashCode2021.Models;
+using HashCode2021.ProcessingModels;
 
-namespace HashCode2021.Validator.Services
+namespace HashCode2021.Validator
 {
-    public class SolutionValidator : ISolutionValidator
+    public static class ScoreService
     {
-        Dictionary<string, List<ServiceImplementedTimes>> implementedServices = new Dictionary<string, List<ServiceImplementedTimes>>();
-        int globalScore = 0;
-        public bool isValidSolution(string instancePath, string solutionPath)
+        static Dictionary<string, List<ServiceImplementedTimes>> implementedServices = new Dictionary<string, List<ServiceImplementedTimes>>();
+        static int globalScore = 0;
+        public static bool isValidSolution(string instancePath, string solutionPath)
         {
             var inputFile = ReadInputFile(instancePath);
             var solutionFile = ReadSolutionFile(solutionPath, inputFile);
@@ -91,12 +89,25 @@ namespace HashCode2021.Validator.Services
             return result;
         }
 
-        public InputModel ReadInputFile(string instancePath)
+        public static InputModel ReadInputFile(string instancePath)
         {
             InputModel inputModel = new InputModel();
-            var fileLines = File.ReadAllLines(instancePath);
+            var fileLines = new List<string>();
+
+            using (StreamReader file = new StreamReader(instancePath))
+            {
+                int counter = 0;
+                string ln;
+
+                while ((ln = file.ReadLine()) != null)
+                {
+                    fileLines.Add(ln);
+                }
+                file.Close();
+            }
+            
             string featureName = string.Empty;
-            for (int i = 0; i < fileLines.Length; i++)
+            for (int i = 0; i < fileLines.Count; i++)
             {
                 var line = fileLines[i];
                 if (i == 0)
@@ -162,9 +173,21 @@ namespace HashCode2021.Validator.Services
         /// <param name="solutionPath"></param>
         /// <param name="inputModel"></param>
         /// <returns></returns>
-        public SolutionFile ReadSolutionFile(string solutionPath, InputModel inputModel)
+        public static SolutionFile ReadSolutionFile(string solutionPath, InputModel inputModel)
         {
-            var solutionLines = File.ReadAllLines(solutionPath);
+            var solutionLines = new List<string>();
+
+            using (StreamReader file = new StreamReader(solutionPath))
+            {
+                int counter = 0;
+                string ln;
+
+                while ((ln = file.ReadLine()) != null)
+                {
+                    solutionLines.Add(ln);
+                }
+                file.Close();
+            }
             int numWorkingEngineers = int.Parse(solutionLines[0]);
             SolutionFile solutionFile = new SolutionFile(numWorkingEngineers);
             for (int i = 0; i < solutionFile.WorkingEngineers; i++)
@@ -178,7 +201,7 @@ namespace HashCode2021.Validator.Services
             }
 
             var createBinaryOperations = solutionLines.Where(x => x.StartsWith("new")).ToList();
-            for (int i = 1; i < solutionLines.Length; i++)
+            for (int i = 1; i < solutionLines.Count; i++)
             {
                 var solutionLine = solutionLines[i];
                 if (solutionLine.Split(' ').Count() == 1)
@@ -192,7 +215,7 @@ namespace HashCode2021.Validator.Services
                         var featureName = string.Empty;
                         var binary = -1;
 
-                        if(operationArray.Count() == 1)
+                        if (operationArray.Count() == 1)
                         {
                             //new
                             engineer.Operations.Add(new EnginnerOperation
@@ -201,7 +224,7 @@ namespace HashCode2021.Validator.Services
                                 Operation = solutionLines[j]
                             });
                         }
-                        else if(operationArray.Count() == 2)
+                        else if (operationArray.Count() == 2)
                         {
                             //wait
                             engineer.Operations.Add(new EnginnerOperation
@@ -210,7 +233,7 @@ namespace HashCode2021.Validator.Services
                                 Operation = solutionLines[j]
                             });
                         }
-                        else if(operationArray.Count() == 3)
+                        else if (operationArray.Count() == 3)
                         {
                             //impl and move
 
@@ -267,23 +290,24 @@ namespace HashCode2021.Validator.Services
         }
 
         // order engineers by endtime or available days and execute their operations that way
-        public int CalculateScore(string instancePath, string solutionPath)
+        public static int CalculateScore(string instancePath, string solutionPath)
         {
+            var score = 0;
             var inputModel = ReadInputFile(instancePath);
             var solutionFile = ReadSolutionFile(solutionPath, inputModel);
 
             Dictionary<int, int> engineerOperationMapping = new Dictionary<int, int>();
-            foreach(var enginneer in solutionFile.Enginners)
+            foreach (var enginneer in solutionFile.Enginners)
             {
                 engineerOperationMapping.Add(enginneer.Id, 0);
                 enginneer.AvailableDays = inputModel.TimeLimitDays;
             }
             int createdBinariesNum = 0;
-            foreach(var engineer in solutionFile.Enginners)
+            foreach (var engineer in solutionFile.Enginners)
             {
-                foreach(var operation in engineer.Operations)
+                foreach (var operation in engineer.Operations)
                 {
-                    if(operation.Operation.Contains("new"))
+                    if (operation.Operation.Contains("new"))
                     {
                         CreateBinary(inputModel, engineer);
                         createdBinariesNum++;
@@ -350,21 +374,25 @@ namespace HashCode2021.Validator.Services
                 //new
             }
 
-            solutionFile.Enginners = solutionFile.Enginners.OrderBy(x => x.Id).ToList();
-            foreach(var engineer in solutionFile.Enginners)
-            {
-                Console.WriteLine(engineer.Operations.Count);
-                foreach(var operation in engineer.Operations)
-                {
-                    Console.WriteLine($"[{operation.Operation}] {operation.StartTime} -> {operation.EndTime}");
-                }
-            }
-            Console.WriteLine();
+            //solutionFile.Enginners = solutionFile.Enginners.OrderBy(x => x.Id).ToList();
+            //foreach (var engineer in solutionFile.Enginners)
+            //{
+            //    Console.WriteLine(engineer.Operations.Count);
+            //    foreach (var operation in engineer.Operations)
+            //    {
+            //        Console.WriteLine($"[{operation.Operation}] {operation.StartTime} -> {operation.EndTime}");
+            //    }
+            //}
+            //Console.WriteLine();
+            //var result = SolutionHelpers.CheckTaskSchedulingBetweenEngineers(solutionFile);
+            //Console.WriteLine(result);
+            //Console.WriteLine("Global Score: " + );
+
             var result = SolutionHelpers.CheckTaskSchedulingBetweenEngineers(solutionFile);
-            Console.WriteLine(result);
-            Console.WriteLine("Score: " + SolutionHelpers.CalculateScore(solutionFile.Enginners, inputModel));
-            Console.WriteLine("Global Score: "+globalScore);
-            return SolutionHelpers.CalculateScore(solutionFile.Enginners, inputModel);
+            if (result)
+                return SolutionHelpers.CalculateScore(solutionFile.Enginners, inputModel);
+            else
+                return 0;
         }
 
         static int CreateBinary(InputModel inputModel, Engineers engineers, int startTime)
@@ -412,99 +440,29 @@ namespace HashCode2021.Validator.Services
         //    }
         //}
 
-        void MoveService(InputModel input, Binary firstBinary, Binary secondBinary, string serviceName, Engineers engineer, int startTime)
+        static void MoveService(InputModel input, Binary firstBinary, Binary secondBinary, string serviceName, Engineers engineer, int startTime)
         {
 
-
-                var firstBinaryService = firstBinary.Services.Where(x => x.Name == serviceName).FirstOrDefault();
-                int moveTime = Math.Max(firstBinary.Services.Count(), secondBinary.Services.Count());
-
-
-                    firstBinary.Services.Remove(firstBinaryService);
-                    secondBinary.Services.Add(firstBinaryService);
-                    //engineer.Operations.Add(new EnginnerOperation
-                    //{
-                    //    BinaryId = -1,
-                    //    StartTime = startTime,
-                    //    EndTime = startTime + moveTime,
-                    //    Operation = $"move {serviceName} {secondBinary.Id}"
-                    //});
-                    //engineer.AvailableDays -= moveTime;
-                    //engineer.BusyUntil += moveTime;
-                    //firstBinary.NotAvailableUntil = Math.Max(firstBinary.NotAvailableUntil, startTime + moveTime);
-                    //econdBinary.NotAvailableUntil = Math.Max(secondBinary.NotAvailableUntil, startTime + moveTime);
-                
-        }
-
-        void MoveService(InputModel input, Binary firstBinary, Binary secondBinary, string serviceName, Engineers engineer)
-        {
 
             var firstBinaryService = firstBinary.Services.Where(x => x.Name == serviceName).FirstOrDefault();
             int moveTime = Math.Max(firstBinary.Services.Count(), secondBinary.Services.Count());
 
+
             firstBinary.Services.Remove(firstBinaryService);
             secondBinary.Services.Add(firstBinaryService);
+            //engineer.Operations.Add(new EnginnerOperation
+            //{
+            //    BinaryId = -1,
+            //    StartTime = startTime,
+            //    EndTime = startTime + moveTime,
+            //    Operation = $"move {serviceName} {secondBinary.Id}"
+            //});
+            //engineer.AvailableDays -= moveTime;
+            //engineer.BusyUntil += moveTime;
+            //firstBinary.NotAvailableUntil = Math.Max(firstBinary.NotAvailableUntil, startTime + moveTime);
+            //econdBinary.NotAvailableUntil = Math.Max(secondBinary.NotAvailableUntil, startTime + moveTime);
+
         }
-
-
-        void CheckIfServicesForScoreAddition(Features feature, Binary featureBinary, int endTime)
-        {
-            if (implementedServices.ContainsKey(feature.Name))
-            {
-                foreach (var service in feature.Services)
-                {
-                    if (featureBinary.Services.Select(x => x.Name).Contains(service.Name))
-                    {
-                        implementedServices[feature.Name].Add(new ServiceImplementedTimes
-                        {
-                            Name = service.Name,
-                            EndTime = endTime
-                        });
-                    }
-                }
-            }
-            else
-            {
-                foreach (var service in feature.Services)
-                {
-                    if (featureBinary.Services.Select(x => x.Name).Contains(service.Name))
-                    {
-                        if (implementedServices.ContainsKey(feature.Name))
-                        {
-                            implementedServices[feature.Name].Add(new ServiceImplementedTimes
-                            {
-                                Name = service.Name,
-                                EndTime = endTime
-                            });
-                        }
-                        else
-                        {
-                            implementedServices.Add(feature.Name, new List<ServiceImplementedTimes>
-                    {
-                        new ServiceImplementedTimes
-                        {
-                            Name = service.Name,
-                            EndTime = endTime
-                        }
-                    });
-                        }
-                    }
-                }
-            }
-
-
-            if (feature.Services.Count == implementedServices[feature.Name].Count)
-            {
-                var lastImplementedServiceTime = implementedServices[feature.Name]
-                                                        .OrderByDescending(x => x.EndTime)
-                                                        .FirstOrDefault();
-
-                int numDaysAvailable = 928 - lastImplementedServiceTime.EndTime;
-                int numUsersBenefit = feature.NumUsersBenefit;
-                if (numDaysAvailable < 0) numDaysAvailable = 0;
-                globalScore += (numDaysAvailable * numUsersBenefit);
-            }
-        }
-        #endregion
     }
 }
+#endregion

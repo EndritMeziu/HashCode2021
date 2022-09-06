@@ -9,5 +9,18 @@ namespace HashCode2021
         public string FeatureName { get; set; }
         public int StartTime { get; set; }
         public int EndTime { get; set; }
+
+
+        public EnginnerOperation Clone()
+        {
+            return new EnginnerOperation
+            {
+                BinaryId = BinaryId,
+                StartTime = StartTime,
+                EndTime = EndTime,
+                FeatureName = FeatureName,
+                Operation = Operation
+            };
+        }
     }
 }

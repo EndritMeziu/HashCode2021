@@ -25,13 +25,15 @@
 
         public Features Clone()
         {
+            var services = new List<Service>();
+            this.Services.ForEach(x => services.Add(x));
             return new Features()
             {
                 Name = this.Name,
                 NumServices = this.NumServices,
                 Difficulty = this.Difficulty,
                 NumUsersBenefit = this.NumUsersBenefit,
-                Services = this.Services
+                Services = services
             };
         }
     }

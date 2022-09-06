@@ -28,19 +28,31 @@ namespace HashCode2021.Validator
                             {
                                 if (currentEngineerOperation.EndTime > otherEngineerOperation.StartTime &&
                                     currentEngineerOperation.EndTime <= otherEngineerOperation.EndTime)
+                                {
+                                    Console.WriteLine("Same binary same feature same interval");
                                     return false;
+                                }
 
                                 if (otherEngineerOperation.EndTime > currentEngineerOperation.StartTime &&
                                     otherEngineerOperation.EndTime <= currentEngineerOperation.EndTime)
+                                {
+                                    Console.WriteLine("Same binary same feature same interval");
                                     return false;
+                                }
 
                                 if (currentEngineerOperation.StartTime >= otherEngineerOperation.StartTime &&
                                     currentEngineerOperation.EndTime <= otherEngineerOperation.EndTime)
+                                {
+                                    Console.WriteLine("Same binary same feature same interval");
                                     return false;
+                                }
 
                                 if (currentEngineerOperation.StartTime >= otherEngineerOperation.StartTime &&
                                     currentEngineerOperation.EndTime >= otherEngineerOperation.EndTime)
+                                {
+                                    Console.WriteLine("Same binary same feature same interval");
                                     return false;
+                                }
                             }
                         }
                     }
@@ -63,6 +75,7 @@ namespace HashCode2021.Validator
                             if (currentEngineerOperation.FeatureName == otherEngineerOperation.FeatureName &&
                                currentEngineerOperation.BinaryId == otherEngineerOperation.BinaryId)
                             {
+                                Console.WriteLine($"Feature {currentEngineerOperation.FeatureName} is done multiple times");
                                 return false;
                             }
                         }
@@ -70,7 +83,31 @@ namespace HashCode2021.Validator
                 }
             }
 
-            //
+            //working in binary while move is being done
+            foreach (var engineer in engineers)
+            {
+                var currentEngineerOperations = engineer.Operations.Where(x => x.Operation.StartsWith("move")).ToList();
+                var otherEngineers = engineers.Where(x => x.Id != engineer.Id).ToList();
+                foreach (var currentEngineerOperation in currentEngineerOperations)
+                {
+                    foreach (var otherEngineer in otherEngineers)
+                    {
+                        var otherEngineerOperations = otherEngineer.Operations.Where(x => !x.Operation.StartsWith("wait") && !x.Operation.StartsWith("new")).ToList();
+                        foreach (var otherEngineerOperation in otherEngineerOperations)
+                        {
+                            if (currentEngineerOperation.BinaryId == otherEngineerOperation.BinaryId &&
+                                currentEngineerOperation.StartTime >= otherEngineerOperation.StartTime &&
+                                currentEngineerOperation.StartTime < otherEngineerOperation.EndTime)
+                                return false;
+
+                            if (currentEngineerOperation.BinaryId == otherEngineerOperation.BinaryId &&
+                                currentEngineerOperation.EndTime > otherEngineerOperation.StartTime &&
+                                currentEngineerOperation.EndTime <= otherEngineerOperation.EndTime)
+                                return false;
+                        }
+                    }
+                }
+            }
 
             return true;
         }

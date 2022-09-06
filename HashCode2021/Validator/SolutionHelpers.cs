@@ -1,7 +1,7 @@
 ﻿using HashCode2021.Input;
-using HashCode2021.Validator.Models;
+using HashCode2021.Models;
 
-namespace HashCode2021.Validator.Helpers
+namespace HashCode2021.Validator
 {
     public static class SolutionHelpers
     {
