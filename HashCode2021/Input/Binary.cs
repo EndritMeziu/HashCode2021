@@ -23,13 +23,14 @@
 
         public Binary Clone()
         {
-            return new Binary()
+            var binary = new Binary(this.Id)
             {
-                Services = this.Services,
                 Id = this.Id,
                 NotAvailableUntil = this.NotAvailableUntil,
                 EngineerWorkingUntil = this.EngineerWorkingUntil
             };
+            this.Services.ForEach(x => binary.Services.Add(new Service(x.Name) { Name = x.Name }));
+            return binary;
         }
         object ICloneable.Clone()
         {

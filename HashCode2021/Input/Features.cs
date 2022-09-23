@@ -26,7 +26,7 @@
         public Features Clone()
         {
             var services = new List<Service>();
-            this.Services.ForEach(x => services.Add(x));
+            this.Services.ForEach(x => services.Add(x.Clone()));
             return new Features()
             {
                 Name = this.Name,

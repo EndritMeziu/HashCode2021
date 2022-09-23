@@ -15,11 +15,11 @@ namespace HashCode2021
         {
             return new EnginnerOperation
             {
-                BinaryId = BinaryId,
-                StartTime = StartTime,
-                EndTime = EndTime,
-                FeatureName = FeatureName,
-                Operation = Operation
+                BinaryId = this.BinaryId,
+                StartTime = this.StartTime,
+                EndTime = this.EndTime,
+                FeatureName = this.FeatureName,
+                Operation = this.Operation
             };
         }
     }

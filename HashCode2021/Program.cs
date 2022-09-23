@@ -4,11 +4,10 @@ using HashCode2021.Models;
 using HashCode2021.ProcessingModels;
 using HashCode2021.Validator;
 
-
-//to fix validator
 int globalScore = 0;
 string inputFile = @"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Instances\five_thousand.txt";
 string outputFile = @"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Solutions\an_example.txt";
+string algorithmFile = @"C:\Users\38343\source\repos\HashCode2021\HashCode2021\Solutions\hill_climbing.txt";
 List<string> alreadyMoved = new List<string>();
 List<FeatureModel> features = new List<FeatureModel>();
 Dictionary<string, List<ServiceImplementedTimes>> implementedServices = new Dictionary<string, List<ServiceImplementedTimes>>();
@@ -16,7 +15,7 @@ Dictionary<int, List<BinaryBusyTimes>> binaryBusyTimes = new Dictionary<int, Lis
 var input = ReadFile(inputFile);
 var solution = new List<Engineers>();
 int initialBinaries = 0;
-while (globalScore < 150000000)
+while (globalScore < 1)
 {
     globalScore = 0;
     binaryBusyTimes = new Dictionary<int, List<BinaryBusyTimes>>();
@@ -29,7 +28,7 @@ while (globalScore < 150000000)
     var notImplementedFeatures = GetNotImplementedFeatures(input, solution);
     var processedNotImplemented = ProcessNotImplementedFeatures(notImplementedFeatures, input);
 }
-PerformHillClimbing(input, solution, binaryBusyTimes);
+PerformTabuSearch(input, solution, binaryBusyTimes, globalScore);
 
 //PerformHillClimbing(input, solution, binaryBusyTimes);
 ///
@@ -59,7 +58,7 @@ PerformHillClimbing(input, solution, binaryBusyTimes);
         //initialSolution = initialSolution.OrderBy(x => x.AvailableDays).ToList();
         foreach (var engineer in initialSolution)
         {
-           if (engineer.BusyUntil > i)
+            if (engineer.BusyUntil > i)
                 continue;
 
             if (input.NumBinaries < (100 * input.Services.Count) / 100)
@@ -90,19 +89,11 @@ PerformHillClimbing(input, solution, binaryBusyTimes);
                 while (retries < 10) { 
                     FeatureModel toDoFeature;
                     Dictionary<int, int> binaryWorkingEngineers = new Dictionary<int, int>();
-                    doableFeatures.ForEach(x => x.Binaries.ForEach(
-                        y =>
-                        {
-                            if(binaryWorkingEngineers.ContainsKey(y.Id))
-                                binaryWorkingEngineers[y.Id] += GetNumberOfEnginnersWorkingOnCurrentBinary(y, initialSolution, i);
-                            else
-                                binaryWorkingEngineers.Add(y.Id, GetNumberOfEnginnersWorkingOnCurrentBinary(y, initialSolution, i));
-                        }
-                    ));
-                    toDoFeature = doableFeatures.OrderByDescending(x => (x.Feature.NumUsersBenefit)/ (x.FeatureBinaryTime.Values.Sum() + (5*GetWorkingEngineersInBinaries(x.Binaries, binaryWorkingEngineers)))).Skip(0).FirstOrDefault();
+
+                    toDoFeature = doableFeatures.OrderByDescending(x => (x.Feature.NumUsersBenefit)/ (x.FeatureBinaryTime.Values.Sum())).Skip(retries).FirstOrDefault();
                     var feature = toDoFeature?.Feature;
 
-                    var featureBinary = toDoFeature?.Binaries.Where(x => x.NotAvailableUntil <= i).OrderBy(x => GetNumberOfEnginnersWorkingOnCurrentBinary(x,initialSolution,i)).FirstOrDefault();
+                    var featureBinary = toDoFeature?.Binaries.OrderBy(x => Guid.NewGuid()).FirstOrDefault();
 
                     if (featureBinary == null || featureBinary.NotAvailableUntil > i || engineer.AvailableDays - GetFeatureTime(feature, featureBinary, initialSolution, i) < 0)
                     {
@@ -117,7 +108,7 @@ PerformHillClimbing(input, solution, binaryBusyTimes);
                         engineer.AvailableDays -= featureTime;
                         engineer.BusyUntil = endTime;
                         input.Binaries.Where(x => x.Id == featureBinary.Id).FirstOrDefault().EngineerWorkingUntil = Math.Max(featureBinary.EngineerWorkingUntil, endTime);
-                        //featureBinary.EngineerWorkingUntil  = Math.Max(featureBinary.EngineerWorkingUntil, endTime);
+                        featureBinary.EngineerWorkingUntil  = Math.Max(featureBinary.EngineerWorkingUntil, endTime);
                         ImplementFeature(engineer, feature, featureBinary, i, endTime);
                         processedFeatures.Add($"impl {feature.Name} {featureBinary.Id}");
                         CheckIfServicesForScoreAddition(feature, featureBinary, endTime);
@@ -157,117 +148,187 @@ PerformHillClimbing(input, solution, binaryBusyTimes);
     //        Console.WriteLine($"[{operation.Operation}] {operation.StartTime} -> {operation.EndTime}");
     //    }
     //}
-    Console.WriteLine();
-
 
     Console.WriteLine("Score: " + globalScore);
-    Console.WriteLine("Score2: "+CalculateScore(initialSolution, input));
+    var baseInput = ReadFile(inputFile);
+    globalScore = ScoreCalculate(initialSolution, baseInput);
+    Console.WriteLine("Score2: "+ globalScore);
     return initialSolution;
+}
+
+void PerformTabuSearch(InputModel inputModel, List<Engineers> initialSolution, Dictionary<int, List<BinaryBusyTimes>> binaryBusyTimes, int score)
+{
+    Dictionary<string, List<TabuModel>> tabuList = new Dictionary<string, List<TabuModel>>();
+    Dictionary<List<Engineers>, int> solutionsList = new Dictionary<List<Engineers>, int>();
+    List<Engineers> bestSolution = new List<Engineers>();
+    int count = 0;
+    var baseInput = ReadFile(inputFile);
+    while (count++ < 1000000)
+    {
+        int listCount = 0;
+        do {
+            listCount++;
+            var clonedSolution = CloneSolution(initialSolution);
+            clonedSolution = ReplaceTwoRandomImplOperationTabu(clonedSolution, inputModel, tabuList, score);
+            //SaveSolution(clonedSolution, algorithmFile);
+            if (clonedSolution != null && SolutionHelpers.CheckTaskSchedulingBetweenEngineers(new SolutionFile(clonedSolution.Count) { Enginners = CloneSolution(clonedSolution), WorkingEngineers = clonedSolution.Count}))
+            {
+                var clonedBaseInput = CloneInputFile(baseInput);
+                solutionsList.Add(clonedSolution, ScoreCalculate(clonedSolution, clonedBaseInput));
+            }
+        }
+        while (solutionsList.Count < 15 && listCount < 100);
+        solutionsList = solutionsList.Count() > 0 ? solutionsList : new Dictionary<List<Engineers>, int>();
+        if (solutionsList.Count > 0)
+        {
+            var bestListSolution = solutionsList.OrderByDescending(x => x.Value).First();
+            if (bestListSolution.Value >= score)
+            {
+                if (SolutionHelpers.CheckTaskSchedulingBetweenEngineers(new SolutionFile(bestListSolution.Key.Count) { Enginners = CloneSolution(bestListSolution.Key), WorkingEngineers = bestListSolution.Key.Count }))
+                {
+                    Console.WriteLine("Score: " + bestListSolution.Value);
+                    bestSolution = CloneSolution(bestListSolution.Key);
+                    initialSolution = CloneSolution(bestListSolution.Key);
+                    score = bestListSolution.Value;
+                    SaveSolution(initialSolution, algorithmFile);
+                }
+            }
+        }
+        solutionsList = new Dictionary<List<Engineers>, int>();
+        UpdateTabuList(tabuList);
+    }
+
+    SaveSolution(initialSolution, outputFile);
+    ScoreService.CalculateScore(inputFile, outputFile);
 }
 
 void PerformHillClimbing(InputModel input, List<Engineers> initialSolution, Dictionary<int, List<BinaryBusyTimes>> binaryBusyTimes)
 {
-    //todo calculate if there are features with only a few services to implement
-    //try to switch with existing ones
-
-    //move services between engineers to reduce waiting time
-
-
     int count = 0;
     while(count++ < 10000)
     {
         var clonedSolution = CloneSolution(initialSolution);
-        var selectedEngineer = clonedSolution.OrderBy(x => Guid.NewGuid()).First();
-        Random rnd = new Random();
-        int pos = (rnd.Next() % (selectedEngineer.Operations.Count-1))+1;
-        var randomEngineerOperation = selectedEngineer.Operations.ElementAt(pos);
-        if (randomEngineerOperation.Operation.StartsWith("impl"))
+        clonedSolution = ReplaceTwoRandomImplOperation(clonedSolution, input);
+
+        SaveSolution(clonedSolution, outputFile);
+        var modifiedScore = ScoreService.CalculateScore(inputFile, outputFile);
+        Console.WriteLine("Score from fileRead: " + modifiedScore);
+        Console.WriteLine("Score: " + CalculateScore(clonedSolution, input));
+        var baseInput = ReadFile(inputFile);
+        Console.WriteLine("ScoreCalculation: "+ ScoreCalculate(clonedSolution, baseInput));
+        if (modifiedScore > globalScore)
         {
-            var beforeOperation = selectedEngineer.Operations.ElementAt(pos - 1);
-            //var afterOperation = selectedEngineer.Operations.ElementAt(pos + 1);
-            if (beforeOperation.Operation.StartsWith("impl"))
-            {
-                var beforeOpearationStartTime = beforeOperation.StartTime; //1 - 4
-                var beforeOpearationEndTime = beforeOperation.EndTime;
-                var beforeOperationBinary = beforeOperation.BinaryId;
-                var beforeOperationFeatureName = beforeOperation.FeatureName;
-                var beforeOperationOp = beforeOperation.Operation;
-                var beforeOperationLength = beforeOpearationEndTime - beforeOpearationStartTime;
-
-                var randomOperationStartTime = randomEngineerOperation.StartTime; //4 - 10
-                var randomOperationEndTime = randomEngineerOperation.EndTime;
-                var randomOpearationBinary = randomEngineerOperation.BinaryId;
-                var randomOperationFeatureName = randomEngineerOperation.FeatureName;
-                var randomOperationOp = randomEngineerOperation.Operation;
-                var randomOperationLength = randomOperationEndTime - randomOperationStartTime;
-
-                //try to switch
-                randomEngineerOperation.StartTime = beforeOpearationStartTime;
-                randomEngineerOperation.EndTime = beforeOpearationStartTime + randomOperationLength;
-                randomEngineerOperation.FeatureName = randomOperationFeatureName;
-                randomEngineerOperation.BinaryId = randomOpearationBinary;
-                randomEngineerOperation.Operation = randomOperationOp;
-
-                beforeOperation.StartTime = randomEngineerOperation.EndTime;
-                beforeOperation.EndTime = randomEngineerOperation.EndTime + beforeOperationLength;
-                beforeOperation.FeatureName = beforeOperationFeatureName;
-                beforeOperation.BinaryId = beforeOperationBinary;
-                beforeOperation.Operation = beforeOperationOp;
-
-
-                selectedEngineer.Operations[pos - 1] = randomEngineerOperation;
-                selectedEngineer.Operations[pos] = beforeOperation;
-
-                //clonedSolution[selectedEngineer.Id] = selectedEngineer;
-
-                if (binaryBusyTimes.ContainsKey(randomEngineerOperation.BinaryId.Value))
-                {
-                    var randomBinaryBusyTimes = binaryBusyTimes[randomEngineerOperation.BinaryId.Value];
-                    if (randomBinaryBusyTimes.Where(x => x.StartTime <= randomEngineerOperation.StartTime && x.EndTime >= randomEngineerOperation.StartTime).Any() ||
-                        randomBinaryBusyTimes.Where(x => x.StartTime <= randomEngineerOperation.StartTime && x.EndTime >= randomEngineerOperation.EndTime).Any() ||
-                        randomBinaryBusyTimes.Where(x => x.StartTime <= randomEngineerOperation.EndTime && x.EndTime >= randomEngineerOperation.EndTime).Any())
-                    {
-                        continue;
-                    }
-                }
-
-                if (binaryBusyTimes.ContainsKey(beforeOperation.BinaryId.Value))
-                {
-                    var beforeBinaryBusyTimes = binaryBusyTimes[beforeOperation.BinaryId.Value];
-                    if (beforeBinaryBusyTimes.Where(x => x.StartTime <= beforeOperation.StartTime && x.EndTime >= randomEngineerOperation.StartTime).Any() ||
-                       beforeBinaryBusyTimes.Where(x => x.StartTime <= beforeOperation.StartTime && x.EndTime >= randomEngineerOperation.EndTime).Any() ||
-                       beforeBinaryBusyTimes.Where(x => x.StartTime <= beforeOperation.EndTime && x.EndTime >= randomEngineerOperation.EndTime).Any())
-                    {
-                        continue;
-                    }
-                }
-
-                SaveSolution(clonedSolution, outputFile);
-                var modifiedScore = ScoreService.CalculateScore(inputFile, outputFile);
-                if (modifiedScore > globalScore)
-                {
-                    globalScore = modifiedScore;
-                    initialSolution = CloneSolution(clonedSolution);
-//SaveSolution(clonedSolution, outputFile);
-
-                    Console.WriteLine(globalScore);
-                    Console.WriteLine("Hill Climbing Change");
-                    //foreach (var engineer in initialSolution)
-                    //{
-                    //    Console.WriteLine(engineer.Operations.Count);
-                    //    foreach (var operation in engineer.Operations)
-                    //    {
-                    //        Console.WriteLine($"[{operation.Operation}] {operation.StartTime} -> {operation.EndTime}");
-                    //    }
-                    //}
-                    Console.WriteLine();
-                    Console.WriteLine("Score:" +globalScore);
-                    Console.WriteLine();
-                }
-            }
+            globalScore = modifiedScore;
+            initialSolution = CloneSolution(clonedSolution);
+            //SaveSolution(clonedSolution, outputFile);
+            SaveSolution(clonedSolution, algorithmFile);
+            Console.WriteLine(globalScore);
+            Console.WriteLine("Hill Climbing Change");
+            //foreach (var engineer in initialSolution)
+            //{
+            //    Console.WriteLine(engineer.Operations.Count);
+            //    foreach (var operation in engineer.Operations)
+            //    {
+            //        Console.WriteLine($"[{operation.Operation}] {operation.StartTime} -> {operation.EndTime}");
+            //    }
+            //}
+            Console.WriteLine();
+            Console.WriteLine("Score:" + globalScore);
+            Console.WriteLine();
         }
+        #region commented
+        //var selectedEngineer = clonedSolution.OrderBy(x => Guid.NewGuid()).First();
+        //Random rnd = new Random();
+        //int pos = (rnd.Next() % (selectedEngineer.Operations.Count-1))+1;
+        //var randomEngineerOperation = selectedEngineer.Operations.ElementAt(pos);
 
-        if(count % 1000 == 0)
+        //        if (randomEngineerOperation.Operation.StartsWith("impl"))
+        //        {
+        //            var beforeOperation = selectedEngineer.Operations.ElementAt(pos - 1);
+        //            //var afterOperation = selectedEngineer.Operations.ElementAt(pos + 1);
+        //            if (beforeOperation.Operation.StartsWith("impl"))
+        //            {
+        //                var beforeOpearationStartTime = beforeOperation.StartTime; //1 - 4
+        //                var beforeOpearationEndTime = beforeOperation.EndTime;
+        //                var beforeOperationBinary = beforeOperation.BinaryId;
+        //                var beforeOperationFeatureName = beforeOperation.FeatureName;
+        //                var beforeOperationOp = beforeOperation.Operation;
+        //                var beforeOperationLength = beforeOpearationEndTime - beforeOpearationStartTime;
+
+        //                var randomOperationStartTime = randomEngineerOperation.StartTime; //4 - 10
+        //                var randomOperationEndTime = randomEngineerOperation.EndTime;
+        //                var randomOpearationBinary = randomEngineerOperation.BinaryId;
+        //                var randomOperationFeatureName = randomEngineerOperation.FeatureName;
+        //                var randomOperationOp = randomEngineerOperation.Operation;
+        //                var randomOperationLength = randomOperationEndTime - randomOperationStartTime;
+
+        //                //try to switch
+        //                randomEngineerOperation.StartTime = beforeOpearationStartTime;
+        //                randomEngineerOperation.EndTime = beforeOpearationStartTime + randomOperationLength;
+        //                randomEngineerOperation.FeatureName = randomOperationFeatureName;
+        //                randomEngineerOperation.BinaryId = randomOpearationBinary;
+        //                randomEngineerOperation.Operation = randomOperationOp;
+
+        //                beforeOperation.StartTime = randomEngineerOperation.EndTime;
+        //                beforeOperation.EndTime = randomEngineerOperation.EndTime + beforeOperationLength;
+        //                beforeOperation.FeatureName = beforeOperationFeatureName;
+        //                beforeOperation.BinaryId = beforeOperationBinary;
+        //                beforeOperation.Operation = beforeOperationOp;
+
+
+        //                selectedEngineer.Operations[pos - 1] = randomEngineerOperation;
+        //                selectedEngineer.Operations[pos] = beforeOperation;
+
+        //                //clonedSolution[selectedEngineer.Id] = selectedEngineer;
+
+        //                if (binaryBusyTimes.ContainsKey(randomEngineerOperation.BinaryId.Value))
+        //                {
+        //                    var randomBinaryBusyTimes = binaryBusyTimes[randomEngineerOperation.BinaryId.Value];
+        //                    if (randomBinaryBusyTimes.Where(x => x.StartTime <= randomEngineerOperation.StartTime && x.EndTime >= randomEngineerOperation.StartTime).Any() ||
+        //                        randomBinaryBusyTimes.Where(x => x.StartTime <= randomEngineerOperation.StartTime && x.EndTime >= randomEngineerOperation.EndTime).Any() ||
+        //                        randomBinaryBusyTimes.Where(x => x.StartTime <= randomEngineerOperation.EndTime && x.EndTime >= randomEngineerOperation.EndTime).Any())
+        //                    {
+        //                        continue;
+        //                    }
+        //                }
+
+        //                if (binaryBusyTimes.ContainsKey(beforeOperation.BinaryId.Value))
+        //                {
+        //                    var beforeBinaryBusyTimes = binaryBusyTimes[beforeOperation.BinaryId.Value];
+        //                    if (beforeBinaryBusyTimes.Where(x => x.StartTime <= beforeOperation.StartTime && x.EndTime >= randomEngineerOperation.StartTime).Any() ||
+        //                       beforeBinaryBusyTimes.Where(x => x.StartTime <= beforeOperation.StartTime && x.EndTime >= randomEngineerOperation.EndTime).Any() ||
+        //                       beforeBinaryBusyTimes.Where(x => x.StartTime <= beforeOperation.EndTime && x.EndTime >= randomEngineerOperation.EndTime).Any())
+        //                    {
+        //                        continue;
+        //                    }
+        //                }
+
+        //                SaveSolution(clonedSolution, outputFile);
+        //                var modifiedScore = ScoreService.CalculateScore(inputFile, outputFile);
+        //                if (modifiedScore > globalScore)
+        //                {
+        //                    globalScore = modifiedScore;
+        //                    initialSolution = CloneSolution(clonedSolution);
+        ////SaveSolution(clonedSolution, outputFile);
+
+        //                    Console.WriteLine(globalScore);
+        //                    Console.WriteLine("Hill Climbing Change");
+        //                    //foreach (var engineer in initialSolution)
+        //                    //{
+        //                    //    Console.WriteLine(engineer.Operations.Count);
+        //                    //    foreach (var operation in engineer.Operations)
+        //                    //    {
+        //                    //        Console.WriteLine($"[{operation.Operation}] {operation.StartTime} -> {operation.EndTime}");
+        //                    //    }
+        //                    //}
+        //                    Console.WriteLine();
+        //                    Console.WriteLine("Score:" +globalScore);
+        //                    Console.WriteLine();
+        //                }
+        //            }
+        //        }
+        #endregion
+        if (count % 1000 == 0)
             Console.WriteLine("Iteration "+count);
     }
 
@@ -411,7 +472,7 @@ bool MoveAndCreateNewServices(InputModel input, List<Engineers> initialSolution,
             createdBinaryId = CreateBinary(input, engineer, day);
             if (createdBinaryId != -1)
             {
-                var fromBinaryId = input.Binaries.ElementAt((engineerId) % input.Binaries.Count());
+                var fromBinaryId = input.Binaries.ElementAt(engineerId % input.Binaries.Count);
                 if (fromBinaryId != null)
                 {
                     var firstBinary = input.Binaries.Where(x => x.Id == fromBinaryId.Id).FirstOrDefault();
@@ -439,19 +500,18 @@ bool MoveAndCreateNewServices(InputModel input, List<Engineers> initialSolution,
     }
     else
     {
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < 10; i++)
         {
             var rnd = new Random();
             var enginner = initialSolution.Where(x => x.Id == engineerId).FirstOrDefault();
             //already impemented services
-            var firstBinary = input.Binaries.OrderByDescending(x => x.Services.Count).Take(input.Binaries.Count).ElementAt(engineerId% input.Binaries.Count);
+            var firstBinary = input.Binaries.OrderByDescending(x => x.Services.Count()).Take(input.Binaries.Count / 3).ElementAt(new Random().Next() % (input.Binaries.Count / 4));
             var secondBinary = input.Binaries.Where(x => x.Id != firstBinary.Id)
-                                              .OrderBy(x => x.Id)
                                              .OrderBy(x => x.Services.Count())
                                              .FirstOrDefault();
 
             var service = firstBinary.Services.Where(x => servicesToFeature.ContainsKey(x.Name) && !alreadyMoved.Contains($"{x.Name}"))
-                                              .OrderByDescending(x => servicesToFeature.Values.Sum())
+                                              .OrderByDescending(x => Guid.NewGuid())
                                               .FirstOrDefault(); //find a better strategy to select
 
             if (firstBinary != null && secondBinary != null && service != null && enginner != null)
@@ -834,15 +894,17 @@ Dictionary<string, int> ServicesToFeatures(InputModel input)
 {
     Dictionary<string, int> serviceToFeatures = new Dictionary<string, int>();
     var features = input.Features;
-    foreach (var feature in features)
+    var processedFeatures = ProcessFeatures(input);
+    processedFeatures = processedFeatures.OrderByDescending(x => (x.Feature.NumUsersBenefit)/ (x.FeatureBinaryTime.Values.Sum())).Take(processedFeatures.Count).ToList();   
+    foreach (var feature in processedFeatures)
     {
-        foreach (var service in feature.Services)
+        foreach (var service in feature.Feature.Services)
         {
             if (serviceToFeatures.ContainsKey(service.Name))
-                serviceToFeatures[service.Name] += (feature.NumUsersBenefit/feature.Difficulty);
+                serviceToFeatures[service.Name] += (feature.Feature.NumUsersBenefit/feature.Feature.Difficulty);
             else
             {
-                serviceToFeatures.Add(service.Name, feature.NumUsersBenefit/feature.Difficulty);
+                serviceToFeatures.Add(service.Name, feature.Feature.NumUsersBenefit/feature.Feature.Difficulty);
             }
         }
     }
@@ -1013,6 +1075,137 @@ static bool IsNumeric(object Expression)
     return isNum;
 }
 
+
+static int ScoreCalculate(List<Engineers> solution, InputModel baseInputModel)
+{
+    try
+    {
+
+        Dictionary<int, int> engineerOperationMapping = new Dictionary<int, int>();
+        List<Engineers> newSolution = new List<Engineers>();
+        foreach (var enginneer in solution)
+        {
+            engineerOperationMapping.Add(enginneer.Id, 0);
+            newSolution.Add(new Engineers(enginneer.Id));
+            newSolution.Where(x => x.Id == enginneer.Id).First().AvailableDays = baseInputModel.TimeLimitDays;
+            enginneer.AvailableDays = baseInputModel.TimeLimitDays;
+        }
+        int createdBinariesNum = 0;
+        foreach (var engineer in solution)
+        {
+            foreach (var operation in engineer.Operations)
+            {
+                if (operation.Operation.Contains("new"))
+                {
+                    CreateBinaryScore(baseInputModel);
+                    createdBinariesNum++;
+                }
+            }
+        }
+
+        while (true)
+        {
+            var engineerSolution = solution.OrderByDescending(x => x.AvailableDays).FirstOrDefault();
+            var engineer = newSolution.Where(x => x.Id == engineerSolution.Id).First();
+            //index based operation query does not work as different engineers have different number of operations done
+            int operationIndex = engineerOperationMapping[engineer.Id];
+            EnginnerOperation operation;
+            if (engineerSolution.Operations.Count() > operationIndex)
+                operation = engineerSolution.Operations.ElementAt(operationIndex);
+            else
+                break;
+
+            //wait
+            if (operation.Operation.Contains("wait"))
+            {
+                operation.StartTime = engineer.BusyUntil;
+                operation.EndTime = engineer.BusyUntil + int.Parse(operation.Operation.Split(' ')[1]);
+                engineer.BusyUntil += int.Parse(operation.Operation.Split(' ')[1]);
+                engineer.AvailableDays -= int.Parse(operation.Operation.Split(' ')[1]);
+                engineerSolution.AvailableDays -= int.Parse(operation.Operation.Split(' ')[1]);
+                engineer.Operations.Add(new EnginnerOperation
+                {
+                    FeatureName = operation.FeatureName,
+                    BinaryId = operation.BinaryId,
+                    StartTime = operation.StartTime,
+                    EndTime = operation.EndTime,
+                    Operation = operation.Operation
+                });
+            }
+            else if (operation.Operation.Contains("impl"))
+            {
+                var feature = baseInputModel.Features.Where(x => x.Name == operation.FeatureName).FirstOrDefault();
+                var binary = baseInputModel.Binaries.Where(x => x.Id == operation.BinaryId.Value).FirstOrDefault();
+                var featureTime = GetFeatureTime(feature, binary, newSolution, engineer.BusyUntil);
+                operation.StartTime = engineer.BusyUntil;
+                operation.EndTime = engineer.BusyUntil + featureTime;
+                engineer.AvailableDays -= featureTime;
+                engineerSolution.AvailableDays -= featureTime;
+                engineer.BusyUntil = engineer.BusyUntil + featureTime;
+                binary.EngineerWorkingUntil = Math.Max(binary.EngineerWorkingUntil, operation.EndTime);
+                engineer.Operations.Add(new EnginnerOperation
+                {
+                    FeatureName = operation.FeatureName,
+                    BinaryId = operation.BinaryId,
+                    StartTime = operation.StartTime,
+                    EndTime = operation.EndTime,
+                    Operation = operation.Operation
+                });
+                //CheckIfServicesForScoreAddition(feature, binary, operation.EndTime);
+            }
+            else if (operation.Operation.Contains("move"))
+            {
+                var toMoveService = operation.Operation.Split(' ')[1];
+                var fromBinary = baseInputModel.Binaries.Where(x => x.Services.Select(x => x.Name).Contains(toMoveService)).FirstOrDefault();
+                var toBinary = baseInputModel.Binaries.Where(x => x.Id == int.Parse(operation.Operation.Split(' ')[2])).FirstOrDefault();
+                int moveTime = Math.Max(fromBinary.Services.Count(), toBinary.Services.Count());
+                operation.StartTime = engineer.BusyUntil;
+                operation.EndTime = engineer.BusyUntil + moveTime;
+                engineer.AvailableDays -= moveTime;
+                engineerSolution.AvailableDays -= moveTime;
+                engineer.BusyUntil += moveTime;
+                fromBinary.NotAvailableUntil += Math.Max(fromBinary.NotAvailableUntil, engineer.BusyUntil + moveTime);
+                toBinary.NotAvailableUntil += Math.Max(toBinary.NotAvailableUntil, engineer.BusyUntil + moveTime);
+                engineer.Operations.Add(new EnginnerOperation
+                {
+                    FeatureName = operation.FeatureName,
+                    BinaryId = operation.BinaryId,
+                    StartTime = operation.StartTime,
+                    EndTime = operation.EndTime,
+                    Operation = operation.Operation
+                });
+                MoveServiceScore(baseInputModel, fromBinary, toBinary, toMoveService);
+
+            }
+            else if (operation.Operation.Contains("new"))
+            {
+                operation.StartTime = engineer.BusyUntil;
+                operation.EndTime = engineer.BusyUntil + baseInputModel.TimeToCreateBinary;
+                engineer.BusyUntil = engineer.BusyUntil + baseInputModel.TimeToCreateBinary;
+                engineer.AvailableDays -= baseInputModel.TimeToCreateBinary;
+                engineerSolution.AvailableDays -= baseInputModel.TimeToCreateBinary;
+                engineer.Operations.Add(new EnginnerOperation
+                {
+                    FeatureName = operation.FeatureName,
+                    BinaryId = operation.BinaryId,
+                    StartTime = operation.StartTime,
+                    EndTime = operation.EndTime,
+                    Operation = operation.Operation
+                });
+                //CreateBinary(inputModel, engineer, engineer.BusyUntil);
+            }
+            engineerOperationMapping[engineer.Id] += 1;
+            //new
+        }
+
+        return SolutionHelpers.CalculateScore(newSolution, baseInputModel);
+    }
+    catch (Exception)
+    {
+        return 0;
+    }
+}
+
 static int CalculateScore(List<Engineers> engineers, InputModel inputModel)
 {
     int score = 0;
@@ -1029,8 +1222,8 @@ static int CalculateScore(List<Engineers> engineers, InputModel inputModel)
         var feature = data.OrderByDescending(x => x.EndTime).FirstOrDefault();
         var inputFeature = inputModel.Features.Where(x => x.Name == feature.FeatureName).FirstOrDefault();
         var featureBinaries = processedFeatures.Where(x => x.Feature.Name == feature.FeatureName).FirstOrDefault();
-        //if (featureBinaries.Binaries.Count() != data.Count()) // to fix move service can cause incorrect validation
-        //    continue;
+        if (featureBinaries.Binaries.Count() != data.Count()) // to fix move service can cause incorrect validation
+            continue;
         if (feature != null)
         {
             int numDaysAvailable = inputModel.TimeLimitDays - feature.EndTime;
@@ -1092,7 +1285,7 @@ List<Engineers> RemoveRandomImplFeature(List<Engineers> engineers, InputModel in
 
         foreach(var operation in featureOperationList)
         {
-            var engineer = engineers.Where(x => x.Operations.Select(x => x.Operation).Contains(operation)).FirstOrDefault();
+            var engineer = clonedSolution.Where(x => x.Operations.Select(y => y.Operation).Contains(operation)).FirstOrDefault();
             if(engineer != null)
             {
                 var operationIndex = FindEngineerOperationIndex(engineer, operation);
@@ -1108,22 +1301,24 @@ List<Engineers> RemoveRandomImplFeature(List<Engineers> engineers, InputModel in
                 engineer.BusyUntil = engineer.Operations.ElementAt(engineer.Operations.Count - 1).EndTime;
             }
         }
+
+        return clonedSolution;
     }
 
-    return clonedSolution;
+    return null;
 }
 
 List<Engineers> AddNotImplementedFeature(List<Engineers> engineers, List<FeatureModel> processedFeatures, InputModel inputModel)
 {
     var clonedSolution = CloneSolution(engineers);
-    var selectedEngineer = engineers.OrderByDescending(engineer => engineer.AvailableDays).FirstOrDefault();
     var featureModel = processedFeatures.OrderBy(x => x.FeatureBinaryTime.Values.Sum()).FirstOrDefault();
     foreach(var pair in featureModel.FeatureBinaryTime)
     {
-        if(pair.Value <= selectedEngineer.AvailableDays)
+        var selectedEngineer = clonedSolution.OrderByDescending(engineer => engineer.AvailableDays).FirstOrDefault();
+        if (pair.Value <= selectedEngineer.AvailableDays)
         {
             var featureBinary = inputModel.Binaries.Where(x => x.Id == pair.Key).FirstOrDefault();
-            var featureTime = GetFeatureTime(featureModel.Feature, featureBinary, engineers, selectedEngineer.BusyUntil);
+            var featureTime = GetFeatureTime(featureModel.Feature, featureBinary, clonedSolution, selectedEngineer.BusyUntil);
             var endTime = selectedEngineer.BusyUntil + featureTime;
             ImplementFeature(selectedEngineer, featureModel.Feature, featureBinary, selectedEngineer.BusyUntil, endTime);
             selectedEngineer.AvailableDays -= featureTime;
@@ -1219,6 +1414,147 @@ List<Engineers> ReplaceTwoRandomImplOperation(List<Engineers> engineers, InputMo
     return clonedSolution;
 }
 
+List<Engineers> ReplaceTwoRandomImplOperationTabu(List<Engineers> engineers, InputModel inputModel, Dictionary<string, List<TabuModel>> tabuList, int score)
+{
+    var clonedSolution = CloneSolution(engineers);
+    Engineers selectedEngineer;
+    int selectedEngineerIndex = 0;
+
+    var rnd = new Random();
+    while(true) 
+    {
+        selectedEngineerIndex = rnd.Next() % clonedSolution.Count;
+        selectedEngineer = clonedSolution.ElementAt(selectedEngineerIndex);
+        if (selectedEngineer.Operations.Where(x => x.Operation.StartsWith("impl")).Count() > 1)
+            break;
+    }
+
+    int firstOperationIndex = 0;
+    int secondOperationIndex = 0;
+    do
+    {
+        firstOperationIndex = rnd.Next(0, selectedEngineer.Operations.Count - 1);
+        //Thread.Sleep(50);
+        secondOperationIndex = rnd.Next(0, selectedEngineer.Operations.Count - 1);
+        //secondOperationIndex = (firstOperationIndex + 1) % (selectedEngineer.Operations.Count);
+    }
+    while (!selectedEngineer.Operations.ElementAt(firstOperationIndex).Operation.StartsWith("impl") ||
+           !selectedEngineer.Operations.ElementAt(secondOperationIndex).Operation.StartsWith("impl") ||
+           firstOperationIndex == secondOperationIndex);
+
+    int operationCount = 0;
+    if (secondOperationIndex < firstOperationIndex)
+    {
+        var temp = firstOperationIndex;
+        firstOperationIndex = secondOperationIndex;
+        secondOperationIndex = temp;
+    }
+
+
+    operationCount = firstOperationIndex;
+    var firstOperation = selectedEngineer.Operations.ElementAt(firstOperationIndex).Clone();
+    var secondOperation = selectedEngineer.Operations.ElementAt(secondOperationIndex).Clone();
+   
+
+    while (operationCount <= secondOperationIndex)
+    {
+        EnginnerOperation lastOperation;
+        if (firstOperation.StartTime == 0)
+            lastOperation = selectedEngineer.Operations.ElementAt(operationCount);
+        else
+            lastOperation = selectedEngineer.Operations.ElementAt(operationCount - 1);
+        if (operationCount == firstOperationIndex)
+        {
+            selectedEngineer.Operations.ElementAt(firstOperationIndex).Operation = secondOperation.Operation;
+            selectedEngineer.Operations.ElementAt(firstOperationIndex).StartTime = lastOperation.EndTime;
+            selectedEngineer.Operations.ElementAt(firstOperationIndex).EndTime = lastOperation.EndTime + (secondOperation.EndTime - secondOperation.StartTime);
+            selectedEngineer.Operations.ElementAt(firstOperationIndex).FeatureName = secondOperation.FeatureName;
+            selectedEngineer.Operations.ElementAt(firstOperationIndex).BinaryId = secondOperation.BinaryId;
+        }
+        else if (operationCount == secondOperationIndex)
+        {
+            selectedEngineer.Operations.ElementAt(secondOperationIndex).Operation = firstOperation.Operation;
+            selectedEngineer.Operations.ElementAt(secondOperationIndex).StartTime = lastOperation.EndTime;
+            selectedEngineer.Operations.ElementAt(secondOperationIndex).EndTime = lastOperation.EndTime + (firstOperation.EndTime - firstOperation.StartTime);
+            selectedEngineer.Operations.ElementAt(secondOperationIndex).FeatureName = firstOperation.FeatureName;
+            selectedEngineer.Operations.ElementAt(secondOperationIndex).BinaryId = firstOperation.BinaryId;
+        }
+        else
+        {
+            int currentOperationTime = selectedEngineer.Operations.ElementAt(operationCount).EndTime -
+                                        selectedEngineer.Operations.ElementAt(operationCount).StartTime;
+
+            selectedEngineer.Operations.ElementAt(operationCount).StartTime = lastOperation.EndTime;
+            selectedEngineer.Operations.ElementAt(operationCount).EndTime = lastOperation.EndTime + currentOperationTime;
+        }
+        operationCount++;
+    }
+
+    //add to tabu list
+    if (tabuList.ContainsKey(firstOperation.Operation))
+    {
+        if (!tabuList[firstOperation.Operation].Select(x => x.Operation).Contains(secondOperation.Operation))
+        {
+            tabuList[firstOperation.Operation].Add(new TabuModel
+            {
+                Operation = secondOperation.Operation,
+                NumIterations = 40
+            });
+        }
+        else
+        {
+            //check aspiration criteria
+            var baseInput = ReadFile(inputFile);
+            if (ScoreCalculate(clonedSolution, baseInput) < score)
+                return null;
+        }
+    }
+    else
+    {
+        tabuList.Add(firstOperation.Operation, new List<TabuModel>()
+        {
+            new TabuModel()
+            {
+                NumIterations = 40,
+                Operation = secondOperation.Operation
+            }
+        });
+    }
+
+
+    if (tabuList.ContainsKey(secondOperation.Operation))
+    {
+        if (!tabuList[secondOperation.Operation].Select(x => x.Operation).Contains(firstOperation.Operation))
+        {
+            tabuList[secondOperation.Operation].Add(new TabuModel
+            {
+                Operation = firstOperation.Operation,
+                NumIterations = 40
+            });
+        }
+        else
+        {
+            //check aspiration criteria
+            var baseInput = ReadFile(inputFile);
+            if (ScoreCalculate(clonedSolution, baseInput) < score)
+                return null;
+        }
+    }
+    else
+    {
+        tabuList.Add(secondOperation.Operation, new List<TabuModel>()
+        {
+            new TabuModel()
+            {
+                NumIterations = 40,
+                Operation = firstOperation.Operation
+            }
+        });
+    }
+
+    return clonedSolution;
+}
+
 #endregion
 
 
@@ -1226,7 +1562,7 @@ List<Engineers> ReplaceTwoRandomImplOperation(List<Engineers> engineers, InputMo
 int FindEngineerOperationIndex(Engineers engineer, string operation)
 {
     int index = 0;
-    foreach(var engineerOperation in engineer.Operations.Select(x => x.FeatureName))
+    foreach(var engineerOperation in engineer.Operations.Select(x => x.Operation))
     {
         if (operation == engineerOperation)
             break;
@@ -1238,3 +1574,57 @@ int FindEngineerOperationIndex(Engineers engineer, string operation)
 }
 
 #endregion
+
+
+static void UpdateTabuList(Dictionary<string, List<TabuModel>> tabuList)
+{
+    Dictionary<string,List<TabuModel>> toRemoveModels = new Dictionary<string, List<TabuModel>>();
+    foreach(var element in tabuList)
+    {
+        foreach(var tabuModel in element.Value)
+        {
+            tabuModel.NumIterations -= 1;
+            if (tabuModel.NumIterations <= 0)
+            {
+                tabuModel.NumIterations = 0;
+                if(toRemoveModels.ContainsKey(element.Key))
+                {
+                    toRemoveModels[element.Key].Add(tabuModel);
+                }
+                else
+                    toRemoveModels.Add(element.Key, new List<TabuModel> { tabuModel});
+            }
+        }
+    }
+
+    foreach(var element in toRemoveModels)
+    {
+        foreach(var model in element.Value)
+            tabuList[element.Key].Remove(model);
+    }
+}
+
+static void CreateBinaryScore(InputModel inputModel)
+{
+    var lastBinaryId = inputModel.Binaries.OrderByDescending(x => x.Id).FirstOrDefault().Id;
+    inputModel.Binaries.Add(new Binary
+    {
+        Services = new List<Service>(),
+        Done = false,
+        Id = lastBinaryId + 1
+    });
+}
+
+static void MoveServiceScore(InputModel input, Binary firstBinary, Binary secondBinary, string serviceName)
+{
+    var firstBinaryService = firstBinary.Services.Where(x => x.Name == serviceName).FirstOrDefault();
+    int moveTime = Math.Max(firstBinary.Services.Count(), secondBinary.Services.Count());
+    firstBinary.Services.Remove(firstBinaryService);
+    secondBinary.Services.Add(firstBinaryService);
+}
+
+static InputModel CloneInputFile(InputModel inputModel)
+{
+    return inputModel.Clone();
+}
+

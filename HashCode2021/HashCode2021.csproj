@@ -10,7 +10,6 @@
 
   <ItemGroup>
     <Folder Include="Instances\" />
-    <Folder Include="Solutions\" />
   </ItemGroup>
 
 </Project>

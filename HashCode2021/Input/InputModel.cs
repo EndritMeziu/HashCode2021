@@ -21,5 +21,22 @@ namespace HashCode2021
         public List<Binary> Binaries { get; set; }
         public List<Features> Features { get; set; }
         public int TimeToCreateBinary { get; set; }
+
+        public InputModel Clone()
+        {
+            InputModel inputModel = new InputModel();
+            inputModel.TimeLimitDays = this.TimeLimitDays;
+            inputModel.NumEngineers = this.NumEngineers;
+            inputModel.NumBinaries = this.NumBinaries; 
+            inputModel.NumFeatures = this.NumFeatures;
+            inputModel.NumServices = this.NumServices;
+            inputModel.TimeToCreateBinary = this.TimeToCreateBinary;
+            this.Engineers.ForEach(x => inputModel.Engineers.Add(x.Clone()));
+            this.Services.ForEach(x => inputModel.Services.Add(x.Clone()));
+            this.Binaries.ForEach(x => inputModel.Binaries.Add(x.Clone()));
+            this.Features.ForEach(x => inputModel.Features.Add(x.Clone()));
+
+            return inputModel;
+    }
     }
 }

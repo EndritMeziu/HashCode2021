@@ -395,115 +395,12 @@ namespace HashCode2021.Validator.Services
             });
         }
 
-        //void MoveService(InputModel inputModel, Binary firstBinary, Binary secondBinary, string serviceName, Engineers engineer, int startTime)
-        //{
-
-        //    if (firstBinary.EngineerWorkingUntil <= startTime && secondBinary.EngineerWorkingUntil <= startTime &&
-        //        firstBinary.NotAvailableUntil <= startTime && secondBinary.NotAvailableUntil <= startTime)
-        //    {
-        //        var firstBinaryService = firstBinary.Services.Where(x => x.Name == serviceName).FirstOrDefault();
-        //        int moveTime = Math.Max(firstBinary.Services.Count(), secondBinary.Services.Count());
-
-        //        if (engineer.AvailableDays - moveTime >= 0)
-        //        {
-        //            firstBinary.Services.Remove(firstBinaryService);
-        //            secondBinary.Services.Add(firstBinaryService);
-        //        }
-        //    }
-        //}
-
         void MoveService(InputModel input, Binary firstBinary, Binary secondBinary, string serviceName, Engineers engineer, int startTime)
         {
-
-
-                var firstBinaryService = firstBinary.Services.Where(x => x.Name == serviceName).FirstOrDefault();
-                int moveTime = Math.Max(firstBinary.Services.Count(), secondBinary.Services.Count());
-
-
-                    firstBinary.Services.Remove(firstBinaryService);
-                    secondBinary.Services.Add(firstBinaryService);
-                    //engineer.Operations.Add(new EnginnerOperation
-                    //{
-                    //    BinaryId = -1,
-                    //    StartTime = startTime,
-                    //    EndTime = startTime + moveTime,
-                    //    Operation = $"move {serviceName} {secondBinary.Id}"
-                    //});
-                    //engineer.AvailableDays -= moveTime;
-                    //engineer.BusyUntil += moveTime;
-                    //firstBinary.NotAvailableUntil = Math.Max(firstBinary.NotAvailableUntil, startTime + moveTime);
-                    //econdBinary.NotAvailableUntil = Math.Max(secondBinary.NotAvailableUntil, startTime + moveTime);
-                
-        }
-
-        void MoveService(InputModel input, Binary firstBinary, Binary secondBinary, string serviceName, Engineers engineer)
-        {
-
             var firstBinaryService = firstBinary.Services.Where(x => x.Name == serviceName).FirstOrDefault();
             int moveTime = Math.Max(firstBinary.Services.Count(), secondBinary.Services.Count());
-
             firstBinary.Services.Remove(firstBinaryService);
             secondBinary.Services.Add(firstBinaryService);
-        }
-
-
-        void CheckIfServicesForScoreAddition(Features feature, Binary featureBinary, int endTime)
-        {
-            if (implementedServices.ContainsKey(feature.Name))
-            {
-                foreach (var service in feature.Services)
-                {
-                    if (featureBinary.Services.Select(x => x.Name).Contains(service.Name))
-                    {
-                        implementedServices[feature.Name].Add(new ServiceImplementedTimes
-                        {
-                            Name = service.Name,
-                            EndTime = endTime
-                        });
-                    }
-                }
-            }
-            else
-            {
-                foreach (var service in feature.Services)
-                {
-                    if (featureBinary.Services.Select(x => x.Name).Contains(service.Name))
-                    {
-                        if (implementedServices.ContainsKey(feature.Name))
-                        {
-                            implementedServices[feature.Name].Add(new ServiceImplementedTimes
-                            {
-                                Name = service.Name,
-                                EndTime = endTime
-                            });
-                        }
-                        else
-                        {
-                            implementedServices.Add(feature.Name, new List<ServiceImplementedTimes>
-                    {
-                        new ServiceImplementedTimes
-                        {
-                            Name = service.Name,
-                            EndTime = endTime
-                        }
-                    });
-                        }
-                    }
-                }
-            }
-
-
-            if (feature.Services.Count == implementedServices[feature.Name].Count)
-            {
-                var lastImplementedServiceTime = implementedServices[feature.Name]
-                                                        .OrderByDescending(x => x.EndTime)
-                                                        .FirstOrDefault();
-
-                int numDaysAvailable = 928 - lastImplementedServiceTime.EndTime;
-                int numUsersBenefit = feature.NumUsersBenefit;
-                if (numDaysAvailable < 0) numDaysAvailable = 0;
-                globalScore += (numDaysAvailable * numUsersBenefit);
-            }
         }
         #endregion
     }
